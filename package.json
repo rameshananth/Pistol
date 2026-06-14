@@ -1,0 +1,58 @@
+{
+  "name": "pi-studio",
+  "version": "0.9.32",
+  "description": "Two-pane browser workspace for pi with prompt/response editing, annotations, critiques, active quiz, prompt/response history, live previews, and tmux-backed REPL/literate REPL workflows",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omaclaren/pi-studio.git"
+  },
+  "homepage": "https://github.com/omaclaren/pi-studio#readme",
+  "bugs": {
+    "url": "https://github.com/omaclaren/pi-studio/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-theme"
+  ],
+  "files": [
+    "index.ts",
+    "client",
+    "shared",
+    "themes",
+    "README.md",
+    "CHANGELOG.md",
+    "WORKFLOW.md",
+    "assets/screenshots"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "themes": [
+      "./themes"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "^0.74.0",
+    "@sinclair/typebox": "^0.34.49",
+    "pandoc": "^0.2.0",
+    "pandoc-bin": "^0.2.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.74.0",
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.7.3"
+  }
+}
