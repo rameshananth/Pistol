@@ -1,4 +1,4 @@
-# pi-studio workflow/spec note
+# pistol workflow/spec note
 
 ## Goal
 

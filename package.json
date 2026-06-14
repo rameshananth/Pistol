@@ -1,16 +1,16 @@
 {
-  "name": "pi-studio",
+  "name": "pistol",
   "version": "0.9.32",
   "description": "Two-pane browser workspace for pi with prompt/response editing, annotations, critiques, active quiz, prompt/response history, live previews, and tmux-backed REPL/literate REPL workflows",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/omaclaren/pi-studio.git"
+    "url": "git+https://github.com/omaclaren/pistol.git"
   },
-  "homepage": "https://github.com/omaclaren/pi-studio#readme",
+  "homepage": "https://github.com/omaclaren/pistol#readme",
   "bugs": {
-    "url": "https://github.com/omaclaren/pi-studio/issues"
+    "url": "https://github.com/omaclaren/pistol/issues"
   },
   "keywords": [
     "pi-package",

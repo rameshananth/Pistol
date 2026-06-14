@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `pi-studio` are documented here.
+All notable changes to `pistol` are documented here.
 
 ## [Unreleased]
 
@@ -364,7 +364,7 @@ All notable changes to `pi-studio` are documented here.
 
 ### Changed
 - Sharpened rendered and raw Markdown links, bare URLs, list markers, and sync/history-style badges so low-contrast theme tokens remain readable in Studio.
-- Softened the bundled `pi-studio-light` theme surfaces to reduce pure-white glare and large-surface contrast.
+- Softened the bundled `pistol-light` theme surfaces to reduce pure-white glare and large-surface contrast.
 
 ## [0.6.7] — 2026-04-30
 
@@ -403,7 +403,7 @@ All notable changes to `pi-studio` are documented here.
 
 ### Added
 - Added independent editor and response text-size controls, persisted locally and available in both full Studio and editor-only views.
-- Added optional `pi-studio-dark` and `pi-studio-light` package themes tuned for Studio's browser workspace.
+- Added optional `pistol-dark` and `pistol-light` package themes tuned for Studio's browser workspace.
 
 ### Changed
 - Improved theme adaptation for Studio surfaces, borders, Markdown/code colours, light/dark detection, and softer active-pane borders across bundled and custom pi themes.

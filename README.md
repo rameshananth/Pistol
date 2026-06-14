@@ -1,20 +1,20 @@
-# pi-studio
+# pistol
 
 Extension for [pi](https://pi.dev) that opens a local two-pane browser workspace for working with prompts, responses, live working details, Markdown and LaTeX documents, interactive HTML previews, code files, REPL sessions, and other common text-based files side by side. Annotate responses and files, add local comments, write, edit, run prompts, send code to a REPL, browse prompt and response history, request critiques, and use live preview for code, Markdown, LaTeX, and interactive HTML.
 
 ## Quick demo
 
-[Watch the 2-minute demo (MP4, 2x speed, no audio)](https://github.com/omaclaren/pi-studio/releases/latest/download/pi-studio-demo-2min.mp4)
+[Watch the 2-minute demo (MP4, 2x speed, no audio)](https://github.com/omaclaren/pistol/releases/latest/download/pistol-demo-2min.mp4)
 
 ## Screenshots
 
 **Dark**
 
-![Pi Studio workspace (dark)](./assets/screenshots/dark-workspace.png)
+![Pistol workspace (dark)](./assets/screenshots/dark-workspace.png)
 
 **Light**
 
-![Pi Studio workspace (light)](./assets/screenshots/light-workspace.png)
+![Pistol workspace (light)](./assets/screenshots/light-workspace.png)
 
 ## What it does
 
@@ -43,7 +43,7 @@ Extension for [pi](https://pi.dev) that opens a local two-pane browser workspace
 - Renders Markdown/LaTeX/code previews (math + Mermaid) plus lightweight CSV/TSV table previews, theme-synced with pi, with copy buttons for code blocks and blockquotes
 - Renders straight, unfenced interactive HTML in preview via a sandboxed browser iframe with zoom controls, while fenced `html` blocks remain source code
 - Embeds local PDFs in Studio Markdown previews via explicit `studio-pdf` fenced blocks, with a Focus action for temporarily enlarging the embedded viewer
-- Ships optional `pi-studio-dark` and `pi-studio-light` themes tuned for Studio's browser workspace
+- Ships optional `pistol-dark` and `pistol-light` themes tuned for Studio's browser workspace
 - Exports right-pane preview as PDF (pandoc + LaTeX) or standalone HTML into the source file directory, Studio working directory, or Pi session directory; PDF export can open in a Studio preview tab or the default PDF viewer, and HTML export can open in the default browser or in a new Studio editor tab for inspection/commenting, while preserving authored HTML previews as HTML and rendering CSV/TSV editor previews as tables
 - Exports local files headlessly via `/studio-pdf <path>` to `<name>.studio.pdf` or `/studio-html <path>` to `<name>.studio.html`; without a path, those commands export the last model response to a timestamped file. Agent tools `studio_export_pdf` and `studio_export_html` expose the same export pipeline for remote/Telegram-style sessions.
 - Shows model/session/context usage in the footer, plus a compact-context action
@@ -78,16 +78,16 @@ Extension for [pi](https://pi.dev) that opens a local two-pane browser workspace
 
 ```bash
 # npm
-pi install npm:pi-studio
+pi install npm:pistol
 
 # GitHub
-pi install https://github.com/omaclaren/pi-studio
+pi install https://github.com/omaclaren/pistol
 ```
 
 Run once without installing:
 
 ```bash
-pi -e https://github.com/omaclaren/pi-studio
+pi -e https://github.com/omaclaren/pistol
 ```
 
 ## Studio Markdown extras
@@ -118,7 +118,7 @@ caption: Optional caption
 - For remote SSH sessions, keep Studio bound to localhost and use SSH local port forwarding; `/studio` and `/studio --status` print the full tokenized localhost URL. The SSH hint repeats the full URL so it is visible even if your terminal only shows the latest notification. Open that URL through the tunnel, preserving the `?token=...` parameter. If SSH is not auto-detected, use `/studio --no-browser`; for stable forwarding, use `/studio --port <port>` or combine them, e.g. `/studio --no-browser --port 3417`.
 - Full Studio is a singleton per Pi session: use `/studio` to open it, `/studio-replace` to explicitly replace it, and `/studio-editor-only` for extra editing/preview tabs that do not take over the full Studio session view.
 - Studio is designed as a complement to terminal pi, not a replacement.
-- Installing pi-studio makes the optional `pi-studio-dark` and `pi-studio-light` themes available in pi's theme selector; it does not change your active theme.
+- Installing pistol makes the optional `pistol-dark` and `pistol-light` themes available in pi's theme selector; it does not change your active theme.
 - Editor/code font uses a best-effort terminal-monospace match when the current terminal config exposes it; set `PI_STUDIO_FONT_MONO` to force a specific CSS `font-family` stack. Use `PI_STUDIO_FONT_UI` or `PI_STUDIO_FONT_PROSE` to override the Studio UI or rendered-preview font stacks.
 - The optional REPL view requires `tmux`. Studio can start and stop Studio-owned `pi-studio-repl-*` sessions and can mirror detected `pi-repl-*` sessions, but it will not stop external `pi-repl-*` sessions.
 - Full preview/PDF quality depends on `pandoc` (and `xelatex` for PDF):

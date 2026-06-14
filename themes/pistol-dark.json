@@ -1,6 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
-  "name": "pi-studio-dark",
+  "name": "pistol-dark",
   "vars": {
     "bg": "#181818",
     "surface": "#1f1f1f",
