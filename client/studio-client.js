@@ -1716,13 +1716,13 @@
         let value = String(delta || "").replace(/^\s+/, "");
         // The raw mirror below remains raw; Studio record cards hide only the
         // temp-file wrapper used to submit multiline snippets safely. The
-        // pi-studio-re fragment catches IPython's wrapped pi-studio-repl paths.
+        // pistol-re fragment catches IPython's wrapped pistol-repl paths.
         const submissionEchoPatterns = [
-          /^.*exec\(open\([\s\S]*?pi-studio-re[\s\S]*?globals\(\)\)\s*$/gm,
-          /^.*include\([\s\S]*?pi-studio-re[\s\S]*?\.jl"\)\s*$/gm,
-          /^.*source\([\s\S]*?pi-studio-re[\s\S]*?local\s*=\s*\.GlobalEnv\)\s*$/gm,
-          /^.*:script\s+[\s\S]*?pi-studio-re[\s\S]*?\.ghci"?\s*$/gm,
-          /^.*\(do\s+\(load-file\s+[\s\S]*?pi-studio-re[\s\S]*?:pi-studio\/silent\)\s*$/gm,
+          /^.*exec\(open\([\s\S]*?pistol-re[\s\S]*?globals\(\)\)\s*$/gm,
+          /^.*include\([\s\S]*?pistol-re[\s\S]*?\.jl"\)\s*$/gm,
+          /^.*source\([\s\S]*?pistol-re[\s\S]*?local\s*=\s*\.GlobalEnv\)\s*$/gm,
+          /^.*:script\s+[\s\S]*?pistol-re[\s\S]*?\.ghci"?\s*$/gm,
+          /^.*\(do\s+\(load-file\s+[\s\S]*?pistol-re[\s\S]*?:pistol\/silent\)\s*$/gm,
         ];
         for (const pattern of submissionEchoPatterns) {
           value = value.replace(pattern, "");
@@ -2731,7 +2731,7 @@
         if (debugLog.length > DEBUG_LOG_MAX) debugLog.shift();
         window.__piStudioDebugLog = debugLog.slice();
         try {
-          console.debug("[pi-studio]", new Date(entry.ts).toISOString(), entry.event, entry.payload);
+          console.debug("[pistol]", new Date(entry.ts).toISOString(), entry.event, entry.payload);
         } catch {
           // ignore console errors
         }
@@ -5002,7 +5002,7 @@
           + "    const height = measureHeight();\n"
           + "    if (!height || Math.abs(height - lastHeight) < 2) return;\n"
           + "    lastHeight = height;\n"
-          + "    try { parent.postMessage({ type: 'pi-studio-html-artifact-size', id: PREVIEW_ID, height }, '*'); } catch {}\n"
+          + "    try { parent.postMessage({ type: 'pistol-html-artifact-size', id: PREVIEW_ID, height }, '*'); } catch {}\n"
           + "  }\n"
           + "  function scheduleHeight() {\n"
           + "    if (scheduled) return;\n"
@@ -5023,7 +5023,7 @@
           + "    const rect = target.getBoundingClientRect();\n"
           + "    const scrollTop = getScrollTop();\n"
           + "    try {\n"
-          + "      parent.postMessage({ type: 'pi-studio-html-artifact-fragment', id: PREVIEW_ID, targetTop: Math.max(0, rect.top + scrollTop), scrollTop, viewportHeight: window.innerHeight || 0, documentHeight: measureHeight() }, '*');\n"
+          + "      parent.postMessage({ type: 'pistol-html-artifact-fragment', id: PREVIEW_ID, targetTop: Math.max(0, rect.top + scrollTop), scrollTop, viewportHeight: window.innerHeight || 0, documentHeight: measureHeight() }, '*');\n"
           + "    } catch {}\n"
           + "  }\n"
           + "  function scrollFragmentIntoView(fragment, options) {\n"
@@ -5055,7 +5055,7 @@
           + "    if (target && target !== '_self') return false;\n"
           + "    const href = String(anchor.getAttribute('href') || '').trim();\n"
           + "    if (!isLocalHtmlPreviewLinkHref(href)) return false;\n"
-          + "    try { parent.postMessage({ type: 'pi-studio-html-artifact-local-link', id: PREVIEW_ID, action, href, title: String(anchor.textContent || href).trim(), clientX: event && event.clientX || 0, clientY: event && event.clientY || 0 }, '*'); } catch {}\n"
+          + "    try { parent.postMessage({ type: 'pistol-html-artifact-local-link', id: PREVIEW_ID, action, href, title: String(anchor.textContent || href).trim(), clientX: event && event.clientX || 0, clientY: event && event.clientY || 0 }, '*'); } catch {}\n"
           + "    return true;\n"
           + "  }\n"
           + "  function handleHtmlPreviewLocalLinkClick(event) {\n"
@@ -5178,7 +5178,7 @@
           + "    while (el) {\n"
           + "      const tag = el.tagName ? el.tagName.toLowerCase() : '';\n"
           + "      if (['script', 'style', 'textarea', 'pre', 'code', 'math', 'svg', 'mjx-container'].indexOf(tag) !== -1) return true;\n"
-          + "      if (el.classList && (el.classList.contains('pi-studio-html-math') || el.classList.contains('MathJax'))) return true;\n"
+          + "      if (el.classList && (el.classList.contains('pistol-html-math') || el.classList.contains('MathJax'))) return true;\n"
           + "      el = el.parentElement;\n"
           + "    }\n"
           + "    return false;\n"
@@ -5193,8 +5193,8 @@
           + "      if (segment.start > index) fragment.appendChild(document.createTextNode(text.slice(index, segment.start)));\n"
           + "      const mathId = PREVIEW_ID + '_math_' + (++htmlMathSerial).toString(36);\n"
           + "      const span = document.createElement('span');\n"
-          + "      span.className = 'pi-studio-html-math pi-studio-html-math-' + (segment.display ? 'display' : 'inline');\n"
-          + "      span.setAttribute('data-pi-studio-html-math-id', mathId);\n"
+          + "      span.className = 'pistol-html-math pistol-html-math-' + (segment.display ? 'display' : 'inline');\n"
+          + "      span.setAttribute('data-pistol-html-math-id', mathId);\n"
           + "      span.setAttribute('aria-busy', 'true');\n"
           + "      span.textContent = text.slice(segment.start, segment.end);\n"
           + "      htmlMathPlaceholders.set(mathId, span);\n"
@@ -5216,9 +5216,9 @@
           + "      placeholder.removeAttribute('aria-busy');\n"
           + "      if (result.ok === true && typeof result.html === 'string' && result.html.trim()) {\n"
           + "        placeholder.innerHTML = result.html;\n"
-          + "        placeholder.classList.add('pi-studio-html-math-rendered');\n"
+          + "        placeholder.classList.add('pistol-html-math-rendered');\n"
           + "      } else {\n"
-          + "        placeholder.classList.add('pi-studio-html-math-failed');\n"
+          + "        placeholder.classList.add('pistol-html-math-failed');\n"
           + "        if (typeof result.error === 'string' && result.error) placeholder.title = result.error;\n"
           + "      }\n"
           + "      htmlMathPlaceholders.delete(mathId);\n"
@@ -5250,7 +5250,7 @@
           + "      items.push(...replaceTextNodeWithHtmlMathPlaceholders(node, segments));\n"
           + "    }\n"
           + "    if (items.length > 0) {\n"
-          + "      try { parent.postMessage({ type: 'pi-studio-html-artifact-render-math', id: PREVIEW_ID, items }, '*'); } catch {}\n"
+          + "      try { parent.postMessage({ type: 'pistol-html-artifact-render-math', id: PREVIEW_ID, items }, '*'); } catch {}\n"
           + "    }\n"
           + "  }\n"
           + "  function scheduleHtmlMathRenderScan() {\n"
@@ -5275,19 +5275,19 @@
           + "    const images = Array.prototype.slice.call(document.querySelectorAll('img[src]'));\n"
           + "    images.forEach((image) => {\n"
           + "      if (!image || !image.getAttribute) return;\n"
-          + "      if (image.getAttribute('data-pi-studio-html-resource-resolved') === 'true') return;\n"
+          + "      if (image.getAttribute('data-pistol-html-resource-resolved') === 'true') return;\n"
           + "      const raw = String(image.getAttribute('src') || '').trim();\n"
           + "      if (!shouldResolveHtmlPreviewResourceUrl(raw)) return;\n"
-          + "      let resourceId = image.getAttribute('data-pi-studio-html-resource-id') || '';\n"
+          + "      let resourceId = image.getAttribute('data-pistol-html-resource-id') || '';\n"
           + "      if (!resourceId) {\n"
           + "        resourceId = PREVIEW_ID + '_resource_' + (++htmlResourceSerial).toString(36);\n"
-          + "        image.setAttribute('data-pi-studio-html-resource-id', resourceId);\n"
+          + "        image.setAttribute('data-pistol-html-resource-id', resourceId);\n"
           + "      }\n"
           + "      htmlResourcePlaceholders.set(resourceId, image);\n"
           + "      items.push({ resourceId, url: raw });\n"
           + "    });\n"
           + "    if (items.length > 0) {\n"
-          + "      try { parent.postMessage({ type: 'pi-studio-html-artifact-resolve-resources', id: PREVIEW_ID, resources: items.slice(0, 100) }, '*'); } catch {}\n"
+          + "      try { parent.postMessage({ type: 'pistol-html-artifact-resolve-resources', id: PREVIEW_ID, resources: items.slice(0, 100) }, '*'); } catch {}\n"
           + "    }\n"
           + "  }\n"
           + "  function scheduleHtmlPreviewResourceScan() {\n"
@@ -5304,7 +5304,7 @@
           + "      if (!image || !image.isConnected) return;\n"
           + "      if (result.ok === true && typeof result.dataUrl === 'string' && result.dataUrl) {\n"
           + "        image.setAttribute('src', result.dataUrl);\n"
-          + "        image.setAttribute('data-pi-studio-html-resource-resolved', 'true');\n"
+          + "        image.setAttribute('data-pistol-html-resource-resolved', 'true');\n"
           + "      } else if (typeof result.error === 'string' && result.error) {\n"
           + "        image.setAttribute('title', result.error);\n"
           + "      }\n"
@@ -5383,7 +5383,7 @@
           + "    htmlCommentLastPostAt = Date.now();\n"
           + "    try {\n"
           + "      parent.postMessage({\n"
-          + "        type: 'pi-studio-html-artifact-comment-target',\n"
+          + "        type: 'pistol-html-artifact-comment-target',\n"
           + "        id: PREVIEW_ID,\n"
           + "        kind: kind === 'selection' ? 'selection' : 'element',\n"
           + "        selector: getHtmlCommentSelector(target),\n"
@@ -5397,12 +5397,12 @@
           + "    } catch { return false; }\n"
           + "  }\n"
           + "  function clearHtmlCommentHover() {\n"
-          + "    if (htmlCommentHoverEl && htmlCommentHoverEl.classList) htmlCommentHoverEl.classList.remove('pi-studio-html-comment-hover');\n"
+          + "    if (htmlCommentHoverEl && htmlCommentHoverEl.classList) htmlCommentHoverEl.classList.remove('pistol-html-comment-hover');\n"
           + "    htmlCommentHoverEl = null;\n"
           + "  }\n"
           + "  function setHtmlCommentMode(enabled) {\n"
           + "    htmlCommentMode = Boolean(enabled);\n"
-          + "    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.toggle('pi-studio-html-comment-mode', htmlCommentMode);\n"
+          + "    if (document.documentElement && document.documentElement.classList) document.documentElement.classList.toggle('pistol-html-comment-mode', htmlCommentMode);\n"
           + "    if (!htmlCommentMode) clearHtmlCommentHover();\n"
           + "  }\n"
           + "  function handleHtmlCommentMouseMove(event) {\n"
@@ -5411,7 +5411,7 @@
           + "    if (target === htmlCommentHoverEl) return;\n"
           + "    clearHtmlCommentHover();\n"
           + "    htmlCommentHoverEl = target;\n"
-          + "    if (htmlCommentHoverEl && htmlCommentHoverEl.classList) htmlCommentHoverEl.classList.add('pi-studio-html-comment-hover');\n"
+          + "    if (htmlCommentHoverEl && htmlCommentHoverEl.classList) htmlCommentHoverEl.classList.add('pistol-html-comment-hover');\n"
           + "  }\n"
           + "  function handleHtmlCommentMouseUp(event) {\n"
           + "    if (!htmlCommentMode) return;\n"
@@ -5429,35 +5429,35 @@
           + "  }\n"
           + "  function highlightHtmlCommentTarget(selector, anchorKind) {\n"
           + "    if (htmlCommentHighlightTimer) { clearTimeout(htmlCommentHighlightTimer); htmlCommentHighlightTimer = null; }\n"
-          + "    Array.prototype.slice.call(document.querySelectorAll('.pi-studio-html-comment-highlight')).forEach(function(el) { el.classList.remove('pi-studio-html-comment-highlight'); });\n"
+          + "    Array.prototype.slice.call(document.querySelectorAll('.pistol-html-comment-highlight')).forEach(function(el) { el.classList.remove('pistol-html-comment-highlight'); });\n"
           + "    if (anchorKind === 'html-page' || !selector) { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch { window.scrollTo(0, 0); } return; }\n"
           + "    let target = null;\n"
           + "    try { target = document.querySelector(String(selector || '')); } catch {}\n"
           + "    if (!target) return;\n"
           + "    try { target.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' }); } catch { try { target.scrollIntoView(true); } catch {} }\n"
-          + "    if (target.classList) target.classList.add('pi-studio-html-comment-highlight');\n"
-          + "    htmlCommentHighlightTimer = setTimeout(function() { if (target && target.classList) target.classList.remove('pi-studio-html-comment-highlight'); }, 2400);\n"
+          + "    if (target.classList) target.classList.add('pistol-html-comment-highlight');\n"
+          + "    htmlCommentHighlightTimer = setTimeout(function() { if (target && target.classList) target.classList.remove('pistol-html-comment-highlight'); }, 2400);\n"
           + "  }\n"
           + "  window.addEventListener('message', (event) => {\n"
           + "    const data = event && event.data;\n"
           + "    if (!data || typeof data !== 'object' || data.id !== PREVIEW_ID) return;\n"
-          + "    if (data.type === 'pi-studio-html-artifact-zoom') {\n"
+          + "    if (data.type === 'pistol-html-artifact-zoom') {\n"
           + "      applyZoom(data.zoom);\n"
           + "      return;\n"
           + "    }\n"
-          + "    if (data.type === 'pi-studio-html-artifact-math-rendered') {\n"
+          + "    if (data.type === 'pistol-html-artifact-math-rendered') {\n"
           + "      applyRenderedHtmlMath(data.results);\n"
           + "      return;\n"
           + "    }\n"
-          + "    if (data.type === 'pi-studio-html-artifact-resources-resolved') {\n"
+          + "    if (data.type === 'pistol-html-artifact-resources-resolved') {\n"
           + "      applyResolvedHtmlPreviewResources(data.results);\n"
           + "      return;\n"
           + "    }\n"
-          + "    if (data.type === 'pi-studio-html-artifact-comment-mode') {\n"
+          + "    if (data.type === 'pistol-html-artifact-comment-mode') {\n"
           + "      setHtmlCommentMode(data.enabled);\n"
           + "      return;\n"
           + "    }\n"
-          + "    if (data.type === 'pi-studio-html-artifact-highlight-comment') {\n"
+          + "    if (data.type === 'pistol-html-artifact-highlight-comment') {\n"
           + "      highlightHtmlCommentTarget(data.selector, data.anchorKind);\n"
           + "    }\n"
           + "  });\n"
@@ -5495,13 +5495,13 @@
       }
 
       function buildHtmlArtifactPreviewMathStyle() {
-        return "<style data-pi-studio-html-preview-math>\n"
-          + ".pi-studio-html-math-display{display:block;margin:0.75em 0;overflow-x:auto;text-align:center;}\n"
-          + ".pi-studio-html-math-display>math{display:block;margin:0 auto;}\n"
-          + ".pi-studio-html-math-inline>math{vertical-align:-0.15em;}\n"
-          + "html.pi-studio-html-comment-mode,html.pi-studio-html-comment-mode body{cursor:crosshair!important;}\n"
-          + ".pi-studio-html-comment-hover{outline:2px solid #0f8b8d!important;outline-offset:3px!important;}\n"
-          + ".pi-studio-html-comment-highlight{outline:3px solid #d97706!important;outline-offset:4px!important;box-shadow:0 0 0 6px rgba(217,119,6,.18)!important;}\n"
+        return "<style data-pistol-html-preview-math>\n"
+          + ".pistol-html-math-display{display:block;margin:0.75em 0;overflow-x:auto;text-align:center;}\n"
+          + ".pistol-html-math-display>math{display:block;margin:0 auto;}\n"
+          + ".pistol-html-math-inline>math{vertical-align:-0.15em;}\n"
+          + "html.pistol-html-comment-mode,html.pistol-html-comment-mode body{cursor:crosshair!important;}\n"
+          + ".pistol-html-comment-hover{outline:2px solid #0f8b8d!important;outline-offset:3px!important;}\n"
+          + ".pistol-html-comment-highlight{outline:3px solid #d97706!important;outline-offset:4px!important;box-shadow:0 0 0 6px rgba(217,119,6,.18)!important;}\n"
           + "</style>\n";
       }
 
@@ -5543,7 +5543,7 @@
 
       function handleHtmlArtifactFrameSizeMessage(event) {
         const data = event && event.data;
-        if (!data || typeof data !== "object" || data.type !== "pi-studio-html-artifact-size") return;
+        if (!data || typeof data !== "object" || data.type !== "pistol-html-artifact-size") return;
         const id = typeof data.id === "string" ? data.id : "";
         const record = id ? htmlArtifactFramesById.get(id) : null;
         if (!record || !record.iframe || !record.iframe.isConnected) {
@@ -5574,7 +5574,7 @@
 
       function handleHtmlArtifactFrameFragmentMessage(event) {
         const data = event && event.data;
-        if (!data || typeof data !== "object" || data.type !== "pi-studio-html-artifact-fragment") return;
+        if (!data || typeof data !== "object" || data.type !== "pistol-html-artifact-fragment") return;
         const id = typeof data.id === "string" ? data.id : "";
         const record = id ? htmlArtifactFramesById.get(id) : null;
         if (!record || !record.iframe || !record.iframe.isConnected) {
@@ -5670,7 +5670,7 @@
         if (!record || !record.iframe || !record.iframe.isConnected || !record.iframe.contentWindow) return;
         try {
           record.iframe.contentWindow.postMessage({
-            type: "pi-studio-html-artifact-math-rendered",
+            type: "pistol-html-artifact-math-rendered",
             id: record.id || "",
             results: Array.isArray(results) ? results : [],
           }, "*");
@@ -5699,7 +5699,7 @@
 
       function handleHtmlArtifactFrameMathRenderMessage(event) {
         const data = event && event.data;
-        if (!data || typeof data !== "object" || data.type !== "pi-studio-html-artifact-render-math") return;
+        if (!data || typeof data !== "object" || data.type !== "pistol-html-artifact-render-math") return;
         const id = typeof data.id === "string" ? data.id : "";
         const record = id ? htmlArtifactFramesById.get(id) : null;
         if (!record || !record.iframe || !record.iframe.isConnected) {
@@ -5793,7 +5793,7 @@
         if (!record || !record.iframe || !record.iframe.isConnected || !record.iframe.contentWindow) return;
         try {
           record.iframe.contentWindow.postMessage({
-            type: "pi-studio-html-artifact-resources-resolved",
+            type: "pistol-html-artifact-resources-resolved",
             id: record.id || "",
             results: Array.isArray(results) ? results : [],
           }, "*");
@@ -5829,7 +5829,7 @@
 
       function handleHtmlArtifactFrameResourceMessage(event) {
         const data = event && event.data;
-        if (!data || typeof data !== "object" || data.type !== "pi-studio-html-artifact-resolve-resources") return;
+        if (!data || typeof data !== "object" || data.type !== "pistol-html-artifact-resolve-resources") return;
         const id = typeof data.id === "string" ? data.id : "";
         const record = id ? htmlArtifactFramesById.get(id) : null;
         if (!record || !record.iframe || !record.iframe.isConnected) {
@@ -5870,7 +5870,7 @@
 
       function handleHtmlArtifactFrameLocalLinkMessage(event) {
         const data = event && event.data;
-        if (!data || typeof data !== "object" || data.type !== "pi-studio-html-artifact-local-link") return;
+        if (!data || typeof data !== "object" || data.type !== "pistol-html-artifact-local-link") return;
         const id = typeof data.id === "string" ? data.id : "";
         const record = id ? htmlArtifactFramesById.get(id) : null;
         if (!record || !record.iframe || !record.iframe.isConnected) {
@@ -5909,7 +5909,7 @@
 
       function handleHtmlArtifactFrameCommentTargetMessage(event) {
         const data = event && event.data;
-        if (!data || typeof data !== "object" || data.type !== "pi-studio-html-artifact-comment-target") return;
+        if (!data || typeof data !== "object" || data.type !== "pistol-html-artifact-comment-target") return;
         const id = typeof data.id === "string" ? data.id : "";
         const record = id ? htmlArtifactFramesById.get(id) : null;
         if (!record || !record.iframe || !record.iframe.isConnected) {
@@ -5922,7 +5922,7 @@
         if (note && record.iframe && record.iframe.contentWindow) {
           try {
             record.iframe.contentWindow.postMessage({
-              type: "pi-studio-html-artifact-highlight-comment",
+              type: "pistol-html-artifact-highlight-comment",
               id: record.id || "",
               selector: note.htmlSelector || "",
               anchorKind: note.anchorKind || "html-element",
@@ -6203,7 +6203,7 @@
         const postArtifactZoom = () => {
           if (!iframe || !iframe.contentWindow) return;
           try {
-            iframe.contentWindow.postMessage({ type: "pi-studio-html-artifact-zoom", id: previewId, zoom: artifactZoom }, "*");
+            iframe.contentWindow.postMessage({ type: "pistol-html-artifact-zoom", id: previewId, zoom: artifactZoom }, "*");
           } catch {
             // Ignore iframe postMessage failures.
           }
@@ -6307,7 +6307,7 @@
         if (!record || !record.iframe || !record.iframe.contentWindow) return;
         try {
           record.iframe.contentWindow.postMessage({
-            type: "pi-studio-html-artifact-comment-mode",
+            type: "pistol-html-artifact-comment-mode",
             id: record.id || "",
             enabled: Boolean(record.commentMode),
           }, "*");
@@ -8534,7 +8534,7 @@
             return;
           }
 
-          const exportWarning = String(response.headers.get("x-pi-studio-export-warning") || "").trim();
+          const exportWarning = String(response.headers.get("x-pistol-export-warning") || "").trim();
           const blob = await response.blob();
           const headerFilename = parseContentDispositionFilename(response.headers.get("content-disposition"));
           let downloadName = headerFilename || filenameHint || "studio-preview.pdf";
@@ -8785,7 +8785,7 @@
           }
 
           closeExportStudioWindow(studioPopup);
-          const exportWarning = String(response.headers.get("x-pi-studio-export-warning") || "").trim();
+          const exportWarning = String(response.headers.get("x-pistol-export-warning") || "").trim();
           const blob = await response.blob();
           const headerFilename = parseContentDispositionFilename(response.headers.get("content-disposition"));
           let downloadName = headerFilename || filenameHint || "studio-preview.html";
@@ -18232,7 +18232,7 @@
         }
         try {
           record.iframe.contentWindow.postMessage({
-            type: "pi-studio-html-artifact-highlight-comment",
+            type: "pistol-html-artifact-highlight-comment",
             id: record.id || "",
             selector: note.htmlSelector || "",
             anchorKind: normalizeReviewNoteAnchorKind(note.anchorKind),

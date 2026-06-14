@@ -634,7 +634,7 @@ const STUDIO_REPL_SEND_MAX_CHARS = 200_000;
 const STUDIO_REPL_SEND_DEFAULT_TIMEOUT_MS = 20_000;
 const STUDIO_REPL_SEND_MAX_TIMEOUT_MS = 120_000;
 const STUDIO_REPL_JOURNAL_MAX_ENTRIES = 300;
-const STUDIO_REPL_CONTROL_ROOT = join(tmpdir(), "pi-studio-repl");
+const STUDIO_REPL_CONTROL_ROOT = join(tmpdir(), "pistol-repl");
 const STUDIO_SUBPROCESS_OUTPUT_MAX_BYTES = 2_000_000;
 const STUDIO_PANDOC_TIMEOUT_MS = readStudioPositiveEnvMs("PI_STUDIO_PANDOC_TIMEOUT_MS", 120_000, 5_000, 15 * 60_000);
 const STUDIO_LATEX_TIMEOUT_MS = readStudioPositiveEnvMs("PI_STUDIO_LATEX_TIMEOUT_MS", 120_000, 5_000, 15 * 60_000);
@@ -706,9 +706,9 @@ const STUDIO_TERMINAL_NOTIFY_TITLE = "pi Studio";
 const CMUX_STUDIO_STATUS_KEY = "pi_studio";
 const CMUX_STUDIO_STATUS_COLOR_DARK = "#5ea1ff";
 const CMUX_STUDIO_STATUS_COLOR_LIGHT = "#0047ab";
-const STUDIO_PROMPT_METADATA_CUSTOM_TYPE = "pi-studio/direct-prompt";
+const STUDIO_PROMPT_METADATA_CUSTOM_TYPE = "pistol/direct-prompt";
 const STUDIO_DEFAULT_SCRATCHPAD_DOCUMENT_KEY = "doc:blank:blank";
-const STUDIO_PERSISTENT_STATE_DIR = join(getAgentDir(), "pi-studio");
+const STUDIO_PERSISTENT_STATE_DIR = join(getAgentDir(), "pistol");
 const STUDIO_PERSISTENT_STATE_PATH = join(STUDIO_PERSISTENT_STATE_DIR, "local-state.json");
 
 type StudioSubprocessResult = {
@@ -4404,11 +4404,11 @@ function resolveStudioGitRepoRootForPath(filePath: string): { repoRoot: string; 
 function ensureStudioGitIdentity(repoRoot: string): void {
 	const name = spawnSync("git", ["config", "--get", "user.name"], { cwd: repoRoot, encoding: "utf-8" });
 	if (name.status !== 0 || !String(name.stdout ?? "").trim()) {
-		spawnSync("git", ["config", "user.name", "pi-studio"], { cwd: repoRoot, encoding: "utf-8" });
+		spawnSync("git", ["config", "user.name", "pistol"], { cwd: repoRoot, encoding: "utf-8" });
 	}
 	const email = spawnSync("git", ["config", "--get", "user.email"], { cwd: repoRoot, encoding: "utf-8" });
 	if (email.status !== 0 || !String(email.stdout ?? "").trim()) {
-		spawnSync("git", ["config", "user.email", "pi-studio@example.com"], { cwd: repoRoot, encoding: "utf-8" });
+		spawnSync("git", ["config", "user.email", "pistol@example.com"], { cwd: repoRoot, encoding: "utf-8" });
 	}
 }
 
@@ -6208,7 +6208,7 @@ async function renderStudioMarkdownWithPandoc(markdown: string, isLatex?: boolea
 		// Use standalone mode for embedded resources and LaTeX metadata. A minimal
 		// Studio template keeps Pandoc's default standalone CSS out of the pane while
 		// still rendering LaTeX title/author/abstract metadata.
-		htmlTemplateDir = join(tmpdir(), `pi-studio-pandoc-html-${randomUUID()}`);
+		htmlTemplateDir = join(tmpdir(), `pistol-pandoc-html-${randomUUID()}`);
 		await mkdir(htmlTemplateDir, { recursive: true });
 		const htmlTemplatePath = join(htmlTemplateDir, "template.html");
 		await writeFile(htmlTemplatePath, STUDIO_PANDOC_HTML_FRAGMENT_TEMPLATE, "utf-8");
@@ -6587,7 +6587,7 @@ body.studio-html-export .studio-copy-block-btn {
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="generator" content="pi Studio" />
-  <meta name="pi-studio-exported-at" content="${escapeStudioHtmlText(generatedAt)}" />
+  <meta name="pistol-exported-at" content="${escapeStudioHtmlText(generatedAt)}" />
 ${baseTag}  <title>${escapeStudioHtmlText(title)}</title>
   <style>
     :root {
@@ -6640,7 +6640,7 @@ async function renderStudioStandaloneHtmlWithPandoc(
 
 async function renderStudioLiteralTextPdf(text: string, title = "Studio export", options?: StudioPdfRenderOptions): Promise<Buffer> {
 	const pdfEngine = process.env.PANDOC_PDF_ENGINE?.trim() || "xelatex";
-	const tempDir = join(tmpdir(), `pi-studio-text-pdf-${Date.now()}-${randomUUID()}`);
+	const tempDir = join(tmpdir(), `pistol-text-pdf-${Date.now()}-${randomUUID()}`);
 	const textPath = join(tempDir, "input.txt");
 	const texPath = join(tempDir, "input.tex");
 	const outputPath = join(tempDir, "input.pdf");
@@ -6918,7 +6918,7 @@ async function renderStudioPdfFromGeneratedLatex(
 	pdfOptions?: StudioPdfRenderOptions,
 	extraPreamble = "",
 ): Promise<{ pdf: Buffer; warning?: string }> {
-	const tempDir = join(tmpdir(), `pi-studio-pdf-${Date.now()}-${randomUUID()}`);
+	const tempDir = join(tmpdir(), `pistol-pdf-${Date.now()}-${randomUUID()}`);
 	const preamblePath = join(tempDir, "_pdf_preamble.tex");
 	const latexPath = join(tempDir, "studio-export.tex");
 	const outputPath = join(tempDir, "studio-export.pdf");
@@ -7026,7 +7026,7 @@ async function renderStudioPdfWithPandoc(
 		warning?: string,
 	): Promise<{ pdf: Buffer; warning?: string }> => {
 		const pandocSource = inputFormat === "latex" ? markdownForPdf : normalizeStudioMarkdownFencedBlocks(markdownForPdf);
-		const tempDir = join(tmpdir(), `pi-studio-pdf-${Date.now()}-${randomUUID()}`);
+		const tempDir = join(tmpdir(), `pistol-pdf-${Date.now()}-${randomUUID()}`);
 		const preamblePath = join(tempDir, "_pdf_preamble.tex");
 		const outputPath = join(tempDir, "studio-export.pdf");
 
@@ -7124,7 +7124,7 @@ async function renderStudioPdfWithPandoc(
 	const normalizedMarkdownBody = markdownPreambleSplit.body;
 	const extraPdfPreamble = markdownPreambleSplit.preamble;
 
-	const tempDir = join(tmpdir(), `pi-studio-pdf-${Date.now()}-${randomUUID()}`);
+	const tempDir = join(tmpdir(), `pistol-pdf-${Date.now()}-${randomUUID()}`);
 	const preamblePath = join(tempDir, "_pdf_preamble.tex");
 	const outputPath = join(tempDir, "studio-export.pdf");
 
@@ -9518,12 +9518,12 @@ function getStudioReplCommandSessionSuffix(runtime: StudioReplRuntime, command?:
 }
 
 function getStudioReplSessionName(runtime: StudioReplRuntime, command?: string): string {
-	return `pi-studio-repl-${runtime}${getStudioReplCommandSessionSuffix(runtime, command)}`;
+	return `pistol-repl-${runtime}${getStudioReplCommandSessionSuffix(runtime, command)}`;
 }
 
 function getNewStudioReplSessionName(runtime: StudioReplRuntime, command?: string): string {
 	const suffix = `${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`;
-	return `pi-studio-repl-${runtime}${getStudioReplCommandSessionSuffix(runtime, command)}-${suffix}`;
+	return `pistol-repl-${runtime}${getStudioReplCommandSessionSuffix(runtime, command)}-${suffix}`;
 }
 
 function getStudioReplPaneTarget(sessionName: string): string {
@@ -9531,7 +9531,7 @@ function getStudioReplPaneTarget(sessionName: string): string {
 }
 
 function inferStudioReplSessionRuntime(sessionName: string): { runtime: StudioReplRuntime | "unknown"; source: StudioReplSessionInfo["source"] } {
-	const studioMatch = sessionName.match(/^pi-studio-repl-([a-z0-9-]+)$/i);
+	const studioMatch = sessionName.match(/^pistol-repl-([a-z0-9-]+)$/i);
 	if (studioMatch) {
 		const raw = (studioMatch[1] || "").toLowerCase();
 		const runtime = (["clojure", "python", "ipython", "julia", "shell", "ghci", "r"] as StudioReplRuntime[])
@@ -9548,7 +9548,7 @@ function inferStudioReplSessionRuntime(sessionName: string): { runtime: StudioRe
 }
 
 function shouldShowStudioReplTmuxSession(sessionName: string): boolean {
-	return /^pi-studio-repl-/i.test(sessionName) || /^pi-repl-/i.test(sessionName);
+	return /^pistol-repl-/i.test(sessionName) || /^pi-repl-/i.test(sessionName);
 }
 
 function formatStudioReplSessionLabel(sessionName: string, runtime: StudioReplRuntime | "unknown", source: StudioReplSessionInfo["source"]): string {
@@ -9751,9 +9751,9 @@ function buildStudioPythonControlSource(runtime: "python" | "ipython", code: str
 		`__pi_studio_code = ${JSON.stringify(code)}`,
 		"try:",
 		"    try:",
-		"        __pi_studio_expr = compile(__pi_studio_code, '<pi-studio-repl>', 'eval')",
+		"        __pi_studio_expr = compile(__pi_studio_code, '<pistol-repl>', 'eval')",
 		"    except SyntaxError:",
-		"        exec(compile(__pi_studio_code, '<pi-studio-repl>', 'exec'), globals())",
+		"        exec(compile(__pi_studio_code, '<pistol-repl>', 'exec'), globals())",
 		"    else:",
 		"        __pi_studio_value = eval(__pi_studio_expr, globals())",
 		"        if __pi_studio_value is not None:",
@@ -9768,7 +9768,7 @@ function buildStudioPythonControlSource(runtime: "python" | "ipython", code: str
 function buildStudioJuliaControlSource(code: string, doneFile: string): string {
 	return [
 		"try",
-		`    local __pi_studio_result = Base.include_string(Main, ${JSON.stringify(code)}, "pi-studio-repl")`,
+		`    local __pi_studio_result = Base.include_string(Main, ${JSON.stringify(code)}, "pistol-repl")`,
 		"    if !isnothing(__pi_studio_result)",
 		"        println(repr(__pi_studio_result))",
 		"    end",
@@ -9816,8 +9816,8 @@ function buildStudioClojureControlSource(code: string, doneFile: string): string
 		"  (try",
 		"    (let [rdr (clojure.lang.LineNumberingPushbackReader. (java.io.StringReader. code))]",
 		"      (loop [last-val nil has-val false]",
-		"        (let [form (read rdr false :pi-studio/eof)]",
-		"          (if (= form :pi-studio/eof)",
+		"        (let [form (read rdr false :pistol/eof)]",
+		"          (if (= form :pistol/eof)",
 		"            (when (and has-val (some? last-val)) (prn last-val))",
 		"            (recur (eval form) true)))))",
 		"    (catch Throwable t",
@@ -9841,7 +9841,7 @@ function buildStudioReplSubmissionLine(runtime: StudioReplRuntime, sourceFile: s
 	if (runtime === "julia") return `include(${quotedPath})`;
 	if (runtime === "r") return `source(${quotedPath}, local=.GlobalEnv)`;
 	if (runtime === "ghci") return `:script ${quotedPath}`;
-	if (runtime === "clojure") return `(do (load-file ${quotedPath}) :pi-studio/silent)`;
+	if (runtime === "clojure") return `(do (load-file ${quotedPath}) :pistol/silent)`;
 	return `exec(open(${quotedPath}, encoding="utf-8").read(), globals())`;
 }
 
@@ -9877,7 +9877,7 @@ function prepareStudioReplSubmission(sessionName: string, source: string): Studi
 }
 
 function pasteTextToStudioReplPane(sessionName: string, text: string): { ok: true } | { ok: false; message: string } {
-	const bufferName = `pi-studio-repl-${randomUUID().replace(/-/g, "")}`;
+	const bufferName = `pistol-repl-${randomUUID().replace(/-/g, "")}`;
 	const target = getStudioReplPaneTarget(sessionName);
 	const loadResult = runStudioTmux(["load-buffer", "-b", bufferName, "-"], { input: text, timeout: 5_000 });
 	if (!loadResult.ok) return { ok: false, message: loadResult.message || "Failed to load text into tmux buffer." };
@@ -9933,14 +9933,14 @@ function stripStudioReplSubmissionEcho(output: string): string {
 	let value = String(output || "").replace(/^\s+/, "");
 	// The raw tmux mirror should stay raw, but Studio/tool result output should not
 	// expose the temp-file wrapper used to submit multiline snippets safely. The
-	// `pi-studio-re` fragment intentionally catches IPython's wrapped display of
-	// `pi-studio-repl/...` paths across continuation prompt lines.
+	// `pistol-re` fragment intentionally catches IPython's wrapped display of
+	// `pistol-repl/...` paths across continuation prompt lines.
 	const submissionEchoPatterns = [
-		/^.*exec\(open\([\s\S]*?pi-studio-re[\s\S]*?globals\(\)\)\s*$/gm,
-		/^.*include\([\s\S]*?pi-studio-re[\s\S]*?\.jl"\)\s*$/gm,
-		/^.*source\([\s\S]*?pi-studio-re[\s\S]*?local\s*=\s*\.GlobalEnv\)\s*$/gm,
-		/^.*:script\s+[\s\S]*?pi-studio-re[\s\S]*?\.ghci"?\s*$/gm,
-		/^.*\(do\s+\(load-file\s+[\s\S]*?pi-studio-re[\s\S]*?:pi-studio\/silent\)\s*$/gm,
+		/^.*exec\(open\([\s\S]*?pistol-re[\s\S]*?globals\(\)\)\s*$/gm,
+		/^.*include\([\s\S]*?pistol-re[\s\S]*?\.jl"\)\s*$/gm,
+		/^.*source\([\s\S]*?pistol-re[\s\S]*?local\s*=\s*\.GlobalEnv\)\s*$/gm,
+		/^.*:script\s+[\s\S]*?pistol-re[\s\S]*?\.ghci"?\s*$/gm,
+		/^.*\(do\s+\(load-file\s+[\s\S]*?pistol-re[\s\S]*?:pistol\/silent\)\s*$/gm,
 	];
 	for (const pattern of submissionEchoPatterns) value = value.replace(pattern, "");
 	return value.replace(/^(?:\s*\n)+/, "").replace(/[\t ]+$/gm, "").trimEnd();
@@ -13420,7 +13420,7 @@ export default function (pi: ExtensionAPI) {
 		if (!entry) return null;
 		if (entry.filePath && (entry.tempDirPath || entry.persistent)) return entry;
 
-		const tempDirPath = join(tmpdir(), `pi-studio-prepared-pdf-${Date.now()}-${randomUUID()}`);
+		const tempDirPath = join(tmpdir(), `pistol-prepared-pdf-${Date.now()}-${randomUUID()}`);
 		const filePath = join(tempDirPath, sanitizePdfFilename(entry.filename));
 		await mkdir(tempDirPath, { recursive: true });
 		await writeFile(filePath, entry.pdf);
@@ -13517,7 +13517,7 @@ export default function (pi: ExtensionAPI) {
 		if (!entry) return null;
 		if (entry.filePath && (entry.tempDirPath || entry.persistent)) return entry;
 
-		const tempDirPath = join(tmpdir(), `pi-studio-prepared-html-${Date.now()}-${randomUUID()}`);
+		const tempDirPath = join(tmpdir(), `pistol-prepared-html-${Date.now()}-${randomUUID()}`);
 		const filePath = join(tempDirPath, sanitizeHtmlFilename(entry.filename));
 		await mkdir(tempDirPath, { recursive: true });
 		await writeFile(filePath, entry.html);
