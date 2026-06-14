@@ -544,6 +544,12 @@ interface GitCommitRequestMessage {
 	summary: string;
 }
 
+interface LoadProjectRequestMessage {
+	type: "load_project_request";
+	requestId: string;
+	path: string;
+}
+
 interface OpenEditorOnlyRequestMessage {
 	type: "open_editor_only_request";
 	requestId: string;
@@ -588,6 +594,7 @@ type IncomingStudioMessage =
 	| GitChangesRequestMessage
 	| CreateTopicRequestMessage
 	| GitCommitRequestMessage
+	| LoadProjectRequestMessage
 	| OpenEditorOnlyRequestMessage
 	| CancelRequestMessage;
 
@@ -4369,49 +4376,112 @@ function readStudioGitDiff(baseDir: string):
 	return { ok: true, text: fullDiff, label, repoRoot, branch, hasHead, files };
 }
 
+function looksLikeStudioProjectRoot(dir: string): boolean {
+	try {
+		return existsSync(join(dir, "topic.md")) || existsSync(join(dir, "descriptions.md")) || statSync(join(dir, "mermaid")).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+function resolveStudioGitRepoRootForPath(filePath: string): { repoRoot: string; needsInit: boolean } {
+	let current = dirname(filePath);
+	let projectRootCandidate: string | null = null;
+	while (true) {
+		if (existsSync(join(current, ".git"))) {
+			return { repoRoot: current, needsInit: false };
+		}
+		if (looksLikeStudioProjectRoot(current)) {
+			projectRootCandidate = dirname(current);
+		}
+		const parent = dirname(current);
+		if (parent === current) break;
+		current = parent;
+	}
+	return { repoRoot: projectRootCandidate || dirname(filePath), needsInit: true };
+}
+
+function ensureStudioGitIdentity(repoRoot: string): void {
+	const name = spawnSync("git", ["config", "--get", "user.name"], { cwd: repoRoot, encoding: "utf-8" });
+	if (name.status !== 0 || !String(name.stdout ?? "").trim()) {
+		spawnSync("git", ["config", "user.name", "pi-studio"], { cwd: repoRoot, encoding: "utf-8" });
+	}
+	const email = spawnSync("git", ["config", "--get", "user.email"], { cwd: repoRoot, encoding: "utf-8" });
+	if (email.status !== 0 || !String(email.stdout ?? "").trim()) {
+		spawnSync("git", ["config", "user.email", "pi-studio@example.com"], { cwd: repoRoot, encoding: "utf-8" });
+	}
+}
+
 function commitStudioGitChange(filePath: string, content: string, summary: string, cwd: string):
 	| { ok: true; repoRoot: string; commitHash: string; message: string }
 	| { ok: false; message: string } {
 	const resolved = resolveStudioPath(filePath, cwd);
 	if (resolved.ok === false) return { ok: false, message: resolved.message };
-	const repoResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-		cwd: dirname(resolved.resolved),
-		encoding: "utf-8",
-	});
-	if (repoResult.status !== 0) {
-		return { ok: false, message: "No git repository found for this file." };
-	}
-	const repoRoot = String(repoResult.stdout ?? "").trim();
-	const relativePath = relative(repoRoot, resolved.resolved);
-	if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) {
-		return { ok: false, message: "File is not inside the git repository root." };
-	}
 	const writeResult = writeStudioFile(resolved.resolved, cwd, content);
 	if (writeResult.ok === false) return { ok: false, message: writeResult.message };
-	const addResult = spawnSync("git", ["add", "--", relativePath], {
+
+	const configuredProjectRoot = typeof PROJECT_ROOT === "string" ? PROJECT_ROOT.trim() : "";
+	const fallbackRepoInfo = resolveStudioGitRepoRootForPath(resolved.resolved);
+	const repoRoot = configuredProjectRoot || fallbackRepoInfo.repoRoot;
+	if (!repoRoot) {
+		return { ok: false, message: "No project root is configured for git commits." };
+	}
+	if (!existsSync(repoRoot)) {
+		try {
+			mkdirSync(repoRoot, { recursive: true });
+		} catch (error) {
+			return { ok: false, message: `Could not prepare git repository folder: ${error instanceof Error ? error.message : String(error)}` };
+		}
+	}
+	if (!existsSync(join(repoRoot, ".git"))) {
+		const initResult = spawnSync("git", ["init"], { cwd: repoRoot, encoding: "utf-8" });
+		if (initResult.status !== 0) {
+			return { ok: false, message: `Failed to initialize git repository: ${formatStudioGitSpawnFailure(initResult, ["init"])}` };
+		}
+	}
+	ensureStudioGitIdentity(repoRoot);
+
+	const repoResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
 		cwd: repoRoot,
+		encoding: "utf-8",
+	});
+	const repoRootReal = repoResult.status === 0 ? String(repoResult.stdout ?? "").trim() : repoRoot;
+	const relativePath = relative(repoRootReal, resolved.resolved);
+	if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) {
+		return { ok: false, message: "File is not inside the project repository root." };
+	}
+	const hasHeadResult = spawnSync("git", ["rev-parse", "--verify", "HEAD"], {
+		cwd: repoRootReal,
+		encoding: "utf-8",
+	});
+	const hasHead = hasHeadResult.status === 0;
+	const addResult = spawnSync("git", ["add", "-A"], {
+		cwd: repoRootReal,
 		encoding: "utf-8",
 	});
 	if (addResult.status !== 0) {
-		return { ok: false, message: `Failed to stage file: ${formatStudioGitSpawnFailure(addResult, ["add", "--", relativePath])}` };
+		return { ok: false, message: `Failed to stage project root: ${formatStudioGitSpawnFailure(addResult, ["add", "-A"])}` };
 	}
-	const commitResult = spawnSync("git", ["commit", "-m", summary, "--", relativePath], {
-		cwd: repoRoot,
+	const commitArgs = ["commit", "-m", summary];
+	const commitResult = spawnSync("git", commitArgs, {
+		cwd: repoRootReal,
 		encoding: "utf-8",
 	});
 	if (commitResult.status !== 0) {
-		return { ok: false, message: `Failed to commit file: ${formatStudioGitSpawnFailure(commitResult, ["commit", "-m", summary, "--", relativePath])}` };
+		return { ok: false, message: `Failed to commit project root: ${formatStudioGitSpawnFailure(commitResult, commitArgs)}` };
 	}
 	const commitHashResult = spawnSync("git", ["rev-parse", "--short", "HEAD"], {
-		cwd: repoRoot,
+		cwd: repoRootReal,
 		encoding: "utf-8",
 	});
 	const commitHash = commitHashResult.status === 0 ? String(commitHashResult.stdout ?? "").trim() : "";
 	return {
 		ok: true,
-		repoRoot,
+		repoRoot: repoRootReal,
 		commitHash,
-		message: commitHash ? `Committed ${basename(resolved.resolved)} as ${commitHash}.` : `Committed ${basename(resolved.resolved)}.`,
+		message: commitHash
+			? `Committed ${basename(resolved.resolved)}${hasHead ? "" : " (initial commit)"} to PROJECT_ROOT as ${commitHash}.`
+			: `Committed ${basename(resolved.resolved)}.`,
 	};
 }
 
@@ -8647,6 +8717,48 @@ function parseIncomingMessage(data: RawData): IncomingStudioMessage | null {
 	}
 
 	if (
+		msg.type === "create_topic_request" &&
+		typeof msg.requestId === "string" &&
+		typeof msg.name === "string" &&
+		(msg.dir === undefined || typeof msg.dir === "string")
+	) {
+		return {
+			type: "create_topic_request",
+			requestId: msg.requestId,
+			dir: typeof msg.dir === "string" ? msg.dir : undefined,
+			name: msg.name,
+		};
+	}
+
+	if (
+		msg.type === "load_project_request" &&
+		typeof msg.requestId === "string" &&
+		typeof msg.path === "string"
+	) {
+		return {
+			type: "load_project_request",
+			requestId: msg.requestId,
+			path: msg.path,
+		};
+	}
+
+	if (
+		msg.type === "git_commit_request" &&
+		typeof msg.requestId === "string" &&
+		typeof msg.path === "string" &&
+		typeof msg.content === "string" &&
+		typeof msg.summary === "string"
+	) {
+		return {
+			type: "git_commit_request",
+			requestId: msg.requestId,
+			path: msg.path,
+			content: msg.content,
+			summary: msg.summary,
+		};
+	}
+
+	if (
 		msg.type === "compact_request" &&
 		typeof msg.requestId === "string" &&
 		(msg.customInstructions === undefined || typeof msg.customInstructions === "string")
@@ -10459,7 +10571,7 @@ ${cssVarsBlock}
         </div>
       </div>
       <div class="reference-meta">
-        <span id="blade1ReferenceBadge" class="source-badge">Blade1: Files</span>
+        <button id="blade1ReferenceBadge" type="button" class="source-badge source-badge-button" title="Load the current project root into ProjectSelectionBlade.">Load Project</button>
       </div>
       <div class="response-wrap">
         <div id="blade1Actions" class="response-actions">
@@ -10908,6 +11020,8 @@ export default function (pi: ExtensionAPI) {
 	let preparedHtmlExports = new Map<string, PreparedStudioHtmlExport>();
 	let initialStudioDocument: InitialStudioDocument | null = null;
 	let studioCwd = process.cwd();
+	let PROJECT_ROOT = "";
+	(globalThis as { PROJECT_ROOT?: string }).PROJECT_ROOT = PROJECT_ROOT;
 	let lastCommandCtx: ExtensionCommandContext | null = null;
 	let latestModelRequestCtx: StudioModelRequestContext | null = null;
 	let lastThemeVarsJson = "";
@@ -12382,6 +12496,10 @@ export default function (pi: ExtensionAPI) {
 			try {
 				const topicDir = join(base.resolved, rawName);
 				mkdirSync(join(topicDir, "mermaid"), { recursive: true });
+				const topicMdPath = join(topicDir, "topic.md");
+				if (!existsSync(topicMdPath)) {
+					writeFileSync(topicMdPath, `# ${rawName}\n\n`, { encoding: "utf-8" });
+				}
 				sendToClient(client, {
 					type: "topic_created",
 					requestId: msg.requestId,
@@ -12392,6 +12510,27 @@ export default function (pi: ExtensionAPI) {
 			} catch (error) {
 				sendToClient(client, { type: "error", requestId: msg.requestId, message: `Could not create topic folder: ${error instanceof Error ? error.message : String(error)}` });
 			}
+			return;
+		}
+
+		if (msg.type === "load_project_request") {
+			if (!isValidRequestId(msg.requestId)) {
+				sendToClient(client, { type: "error", requestId: msg.requestId, message: "Invalid request ID." });
+				return;
+			}
+			const base = resolveStudioPath(msg.path, studioCwd);
+			if (base.ok === false) {
+				sendToClient(client, { type: "error", requestId: msg.requestId, message: base.message });
+				return;
+			}
+			PROJECT_ROOT = base.resolved;
+			(globalThis as { PROJECT_ROOT?: string }).PROJECT_ROOT = PROJECT_ROOT;
+			sendToClient(client, {
+				type: "project_loaded",
+				requestId: msg.requestId,
+				path: PROJECT_ROOT,
+				message: `Loaded project root: ${PROJECT_ROOT}.`,
+			});
 			return;
 		}
 

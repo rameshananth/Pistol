@@ -5769,6 +5769,11 @@
       z-index: 2;
     }
 
+    body.studio-ui-refresh .studio-refresh-action-line,
+    body.studio-ui-refresh .studio-refresh-utility-action-line {
+      display: none !important;
+    }
+
     body.studio-ui-refresh .studio-refresh-toolbar-state {
       display: grid;
       gap: 6px;

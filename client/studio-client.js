@@ -2625,6 +2625,7 @@
         if (suggestCompletionBtn) actionLineTwoEl.appendChild(suggestCompletionBtn);
         if (openCompanionBtn) actionLineTwoEl.appendChild(openCompanionBtn);
         if (blade3SaveBtn) actionsEl.appendChild(blade3SaveBtn);
+        if (blade3CommitBtn) actionsEl.appendChild(blade3CommitBtn);
         const replActionLineEl = makeStudioUiRefreshElement("div", "studio-refresh-action-line repl-action-line");
         replActionLineEl.hidden = true;
         if (sendReplBtn) replActionLineEl.appendChild(sendReplBtn);
@@ -4535,6 +4536,14 @@
         return "live";
       }
 
+      function syncProjectLoadButton() {
+        if (!blade1ReferenceBadgeEl) return;
+        const dir = fileBrowserState && fileBrowserState.rootDir ? fileBrowserState.rootDir : (getCurrentResourceDirValue() || "");
+        blade1ReferenceBadgeEl.textContent = "Load Project";
+        blade1ReferenceBadgeEl.title = dir ? ("Load project root: " + dir) : "Load the current project root into ProjectSelectionBlade.";
+        blade1ReferenceBadgeEl.disabled = uiBusy || !dir;
+      }
+
       function updateReferenceBadge() {
         if (!referenceBadgeEl) return;
         const referenceMetaEl = referenceBadgeEl.closest(".reference-meta");
@@ -4543,10 +4552,12 @@
           return;
         }
         if (referenceMetaEl instanceof HTMLElement) referenceMetaEl.hidden = false;
+        syncProjectLoadButton();
 
         if (rightView === "files") {
           const dir = fileBrowserState && fileBrowserState.currentDir ? fileBrowserState.currentDir : (getCurrentResourceDirValue() || "current Studio directory");
           referenceBadgeEl.textContent = "Files: " + dir;
+          syncProjectLoadButton();
           return;
         }
 
@@ -9991,6 +10002,7 @@
 
       function renderBlade1FilesView() {
         if (!blade1FilesBodyEl) return;
+        syncProjectLoadButton();
         const contextKey = getFileBrowserContextKey();
         if (fileBrowserState.contextKey !== contextKey) {
           fileBrowserState = {
@@ -10016,6 +10028,7 @@
       function refreshFileBrowserViews() {
         if (rightView === "files") renderFilesView();
         renderBlade1FilesView();
+        syncProjectLoadButton();
       }
 
       async function loadFileBrowserDirectory(dir, options) {
@@ -19407,6 +19420,23 @@
           return;
         }
 
+        if (message.type === "project_loaded") {
+          if (typeof message.requestId === "string" && pendingRequestId === message.requestId) {
+            pendingRequestId = null;
+            pendingKind = null;
+            clearArmedTitleAttention(message.requestId);
+            stickyStudioKind = null;
+          }
+          setBusy(false);
+          setWsState("Ready");
+          if (typeof message.path === "string" && message.path) {
+            globalThis.PROJECT_ROOT = message.path;
+            syncProjectLoadButton();
+          }
+          setStatus(typeof message.message === "string" ? message.message : "Loaded project root.", "success");
+          return;
+        }
+
         if (message.type === "editor_loaded") {
           if (typeof message.requestId === "string" && pendingRequestId === message.requestId) {
             pendingRequestId = null;
@@ -20580,12 +20610,12 @@
 
       if (blade3CommitBtn) {
         blade3CommitBtn.addEventListener("click", () => {
-          const effectivePath = getEffectiveSavePath();
-          if (!effectivePath) {
-            setStatus("Commit requires a saved file path.", "warning");
+          const projectRoot = (fileBrowserState && fileBrowserState.rootDir) || getCurrentResourceDirValue();
+          if (!projectRoot) {
+            setStatus("Load a project root first.", "warning");
             return;
           }
-          const defaultSummary = "Update " + basenameForStudioPath(effectivePath);
+          const defaultSummary = "Update project at " + basenameForStudioPath(projectRoot);
           const summary = window.prompt("Commit summary:", defaultSummary);
           if (summary == null) return;
           const trimmedSummary = String(summary || "").trim();
@@ -20595,12 +20625,15 @@
           }
           const requestId = beginUiAction("git_commit");
           if (!requestId) return;
+          const instruction =
+            "Commit the entire project root at \"" + projectRoot + "\". " +
+            "Stage all files with git add -A, create a git commit with message: \"" + trimmedSummary + "\". " +
+            "If this repository has no initial commit yet, create the initial commit. " +
+            "Report the commit hash and confirm the project root used.";
           const sent = sendMessage({
-            type: "git_commit_request",
+            type: "send_run_request",
             requestId,
-            path: effectivePath,
-            content: sourceTextEl.value,
-            summary: trimmedSummary,
+            text: instruction,
           });
           if (!sent) {
             pendingRequestId = null;
@@ -21530,6 +21563,27 @@
         await topicHandle.getDirectoryHandle("mermaid", { create: true });
       }
 
+      async function loadProjectRoot() {
+        const dir = (fileBrowserState && fileBrowserState.rootDir) || (fileBrowserState && fileBrowserState.currentDir) || getCurrentResourceDirValue();
+        if (!dir) {
+          setStatus("Open the project files first, then click Load Project.", "warning");
+          return;
+        }
+        setFileBrowserCurrentDirectoryAsWorkingDir(dir);
+        const requestId = beginUiAction("load_project");
+        if (!requestId) return;
+        const sent = sendMessage({
+          type: "load_project_request",
+          requestId,
+          path: dir,
+        });
+        if (!sent) {
+          pendingRequestId = null;
+          pendingKind = null;
+          setBusy(false);
+        }
+      }
+
       async function pickTopicRootFolder() {
         if (projectRootHandle && projectSelectedHandle) {
           topicsRootHandle = projectSelectedHandle;
@@ -21570,8 +21624,9 @@
       }
 
       async function addTopicFolder() {
-        if (!topicsRootHandle) {
-          setStatus("Pick a topics folder first.", "warning");
+        const baseDir = normalizeStudioResourceDirValue(getCurrentResourceDirValue() || (fileBrowserState && fileBrowserState.rootDir) || (fileBrowserState && fileBrowserState.currentDir) || "");
+        if (!baseDir) {
+          setStatus("Load a working directory first.", "warning");
           return;
         }
         let topicName = window.prompt("Name the new topic folder:", "new-topic");
@@ -21581,13 +21636,13 @@
           setStatus("Topic name cannot be empty.", "warning");
           return;
         }
-        try {
-          const topicHandle = await topicsRootHandle.getDirectoryHandle(topicName, { create: true });
-          await ensureTopicScaffold(topicHandle, topicName);
-          await refreshTopicWorkspace();
-          setStatus("Created topic folder: " + topicName + ".", "success");
-        } catch (error) {
-          setStatus("Could not create topic: " + (error && error.message ? error.message : String(error)), "error");
+        const requestId = beginUiAction("create_topic");
+        if (!requestId) return;
+        const sent = sendMessage({ type: "create_topic_request", requestId, dir: baseDir, name: topicName });
+        if (!sent) {
+          pendingRequestId = null;
+          pendingKind = null;
+          setBusy(false);
         }
       }
 
@@ -21636,6 +21691,9 @@
         });
       }
 
+      if (blade1ReferenceBadgeEl) {
+        blade1ReferenceBadgeEl.addEventListener("click", () => { void loadProjectRoot(); });
+      }
       if (topicRootPickBtn) {
         topicRootPickBtn.addEventListener("click", () => { void pickTopicRootFolder(); });
       }
