@@ -28,8 +28,8 @@ import {
 	extractStandaloneLatexDefinitionsFromMarkdown,
 	preserveLiteralLatexCommandsInMarkdown,
 } from "./shared/studio-markdown-latex-literals.js";
-import { escapeStudioPdfLatexTextFragment } from "./shared/pistol-pdf-escape.js";
-import { resolveStudioPdfResourceFile } from "./shared/pistol-pdf-resource.js";
+import { escapeStudioPdfLatexTextFragment } from "./shared/studio-pdf-escape.js";
+import { resolveStudioPdfResourceFile } from "./shared/studio-pdf-resource.js";
 import { buildStudioForwardingHint, buildStudioSshTunnelHint, isStudioSshSession as isSshSession } from "./shared/studio-ssh-hint.js";
 import { renderStudioAnnotationInlineHtml } from "./shared/studio-annotation-render.js";
 
