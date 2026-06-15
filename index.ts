@@ -28,8 +28,8 @@ import {
 	extractStandaloneLatexDefinitionsFromMarkdown,
 	preserveLiteralLatexCommandsInMarkdown,
 } from "./shared/studio-markdown-latex-literals.js";
-import { escapeStudioPdfLatexTextFragment } from "./shared/studio-pdf-escape.js";
-import { resolveStudioPdfResourceFile } from "./shared/studio-pdf-resource.js";
+import { escapeStudioPdfLatexTextFragment } from "./shared/pistol-pdf-escape.js";
+import { resolveStudioPdfResourceFile } from "./shared/pistol-pdf-resource.js";
 import { buildStudioForwardingHint, buildStudioSshTunnelHint, isStudioSshSession as isSshSession } from "./shared/studio-ssh-hint.js";
 import { renderStudioAnnotationInlineHtml } from "./shared/studio-annotation-render.js";
 
@@ -9570,7 +9570,7 @@ function summarizeStudioTraceToolArgs(toolName: string, args: unknown): string |
 	if (normalizedTool === "read" || normalizedTool === "write" || normalizedTool === "edit") {
 		return trimSummary(typeof payload.path === "string" ? payload.path : "");
 	}
-	if (normalizedTool === "repl_send" || normalizedTool === "studio_repl_send") {
+	if (normalizedTool === "repl_send" || normalizedTool === "pistol_repl_send") {
 		return trimSummary(typeof payload.code === "string" ? payload.code : "");
 	}
 	try {
@@ -9595,7 +9595,7 @@ function formatStudioTraceToolArgs(toolName: string, args: unknown): string | nu
 	let raw = "";
 	if (normalizedTool === "bash" && typeof payload.command === "string") {
 		raw = payload.command;
-	} else if ((normalizedTool === "repl_send" || normalizedTool === "studio_repl_send") && typeof payload.code === "string") {
+	} else if ((normalizedTool === "repl_send" || normalizedTool === "pistol_repl_send") && typeof payload.code === "string") {
 		raw = payload.code;
 	} else {
 		try {
@@ -11254,13 +11254,13 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	pi.registerTool({
-		name: "studio_repl_status",
+		name: "pistol_repl_status",
 		label: "Studio REPL status",
 		description: "Inspect Studio-visible tmux REPL sessions and the active Studio REPL session.",
 		promptSnippet: "Inspect the active Studio REPL session and other Studio-visible REPL sessions.",
 		promptGuidelines: [
-			"Use studio_repl_status before claiming whether a Studio REPL session is active if you are unsure.",
-			"Use studio_repl_send, not raw tmux shell commands, when the user asks you to run code in the active Studio REPL.",
+			"Use pistol_repl_status before claiming whether a Studio REPL session is active if you are unsure.",
+			"Use pistol_repl_send, not raw tmux shell commands, when the user asks you to run code in the active Studio REPL.",
 		],
 		parameters: STUDIO_REPL_STATUS_TOOL_PARAMS,
 		async execute(_toolCallId, params) {
@@ -11288,14 +11288,14 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerTool({
-		name: "studio_repl_send",
+		name: "pistol_repl_send",
 		label: "Send to Studio REPL",
 		description: "Execute code in the active or selected Studio tmux-backed REPL session using Studio's safe runtime-specific submission protocol.",
 		promptSnippet: "Execute code in the active Studio REPL session safely, including multiline Python/R/Julia/GHCi/Clojure snippets.",
 		promptGuidelines: [
-			"Use studio_repl_send when the user asks to run code in the active Studio REPL.",
-			"Do not improvise tmux paste-buffer commands for Studio REPL code; studio_repl_send handles multiline quoting and runtime-specific submission.",
-			"If several REPL sessions of the same runtime are running, use studio_repl_status first or pass the exact sessionName when known.",
+			"Use pistol_repl_send when the user asks to run code in the active Studio REPL.",
+			"Do not improvise tmux paste-buffer commands for Studio REPL code; pistol_repl_send handles multiline quoting and runtime-specific submission.",
+			"If several REPL sessions of the same runtime are running, use pistol_repl_status first or pass the exact sessionName when known.",
 		],
 		parameters: STUDIO_REPL_SEND_TOOL_PARAMS,
 		executionMode: "sequential",
@@ -11381,12 +11381,12 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerTool({
-		name: "studio_export_pdf",
+		name: "pistol_export_pdf",
 		label: "Studio PDF export",
 		description: "Export Markdown/LaTeX content, a local file, or the last model response to PDF using the Studio PDF pipeline.",
 		promptSnippet: "Export Markdown/LaTeX, a local file, or the last model response to PDF with Studio's PDF pipeline.",
 		promptGuidelines: [
-			"Use studio_export_pdf when the user asks to make/export/render content as a PDF using Studio.",
+			"Use pistol_export_pdf when the user asks to make/export/render content as a PDF using Studio.",
 			"For remote or Telegram sessions, leave open=false and report the generated file path unless a separate upload/send-file tool is available.",
 			"Pass markdown directly when exporting content composed in the current assistant turn; omit markdown and path only when exporting the previous model response.",
 		],
@@ -11402,12 +11402,12 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerTool({
-		name: "studio_export_html",
+		name: "pistol_export_html",
 		label: "Studio HTML export",
 		description: "Export Markdown/LaTeX content, a local file, or the last model response to standalone HTML using the Studio preview pipeline.",
 		promptSnippet: "Export Markdown/LaTeX, a local file, or the last model response to standalone HTML with Studio's preview pipeline.",
 		promptGuidelines: [
-			"Use studio_export_html when the user asks to make/export/render content as HTML using Studio.",
+			"Use pistol_export_html when the user asks to make/export/render content as HTML using Studio.",
 			"For remote or Telegram sessions, leave open=false and report the generated file path unless a separate upload/send-file tool is available.",
 			"Pass markdown directly when exporting content composed in the current assistant turn; omit markdown and path only when exporting the previous model response.",
 		],
@@ -13460,7 +13460,7 @@ export default function (pi: ExtensionAPI) {
 				sendToClient(client, {
 					type: "error",
 					requestId: msg.requestId,
-					message: "Refresh from disk needs a file path. Use Files → Open here, Files → Open file tab, or /studio-editor-only <path> for a refreshable editor tab.",
+					message: "Refresh from disk needs a file path. Use Files → Open here, Files → Open file tab, or /pistol-editor-only <path> for a refreshable editor tab.",
 				});
 				return;
 			}
@@ -14389,7 +14389,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/studio.css") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondText(res, 403, "Invalid or expired studio token. Re-run /studio.");
+				respondText(res, 403, "Invalid or expired studio token. Re-run /pistol.");
 				return;
 			}
 
@@ -14418,7 +14418,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/studio-annotation-helpers.js" || requestUrl.pathname === "/studio-client.js") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondText(res, 403, "Invalid or expired studio token. Re-run /studio.");
+				respondText(res, 403, "Invalid or expired studio token. Re-run /pistol.");
 				return;
 			}
 
@@ -14454,7 +14454,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/scratchpad-state") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 			void handleScratchpadStateRequest(req, res, requestUrl).catch((error) => {
@@ -14469,7 +14469,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/review-notes") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 			void handleReviewNotesRequest(req, res, requestUrl).catch((error) => {
@@ -14484,7 +14484,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/clipboard") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 			void handleClipboardRequest(req, res).catch((error) => {
@@ -14499,7 +14499,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/render-preview") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14522,7 +14522,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/render-math") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14547,9 +14547,9 @@ export default function (pi: ExtensionAPI) {
 			if (token !== serverState.token) {
 				const method = (req.method ?? "GET").toUpperCase();
 				if (method === "GET") {
-					respondText(res, 403, "Invalid or expired studio token. Re-run /studio.");
+					respondText(res, 403, "Invalid or expired studio token. Re-run /pistol.");
 				} else {
-					respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+					respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				}
 				return;
 			}
@@ -14579,9 +14579,9 @@ export default function (pi: ExtensionAPI) {
 			if (token !== serverState.token) {
 				const method = (req.method ?? "GET").toUpperCase();
 				if (method === "GET") {
-					respondText(res, 403, "Invalid or expired studio token. Re-run /studio.");
+					respondText(res, 403, "Invalid or expired studio token. Re-run /pistol.");
 				} else {
-					respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+					respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				}
 				return;
 			}
@@ -14609,7 +14609,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/file-browser") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14637,7 +14637,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/file-browser-open") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14650,7 +14650,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/local-preview-link") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14673,7 +14673,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/reveal-local-resource") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14686,7 +14686,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/pdf-resource") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondText(res, 403, "Invalid or expired studio token. Re-run /studio.");
+				respondText(res, 403, "Invalid or expired studio token. Re-run /pistol.");
 				return;
 			}
 
@@ -14707,7 +14707,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/markdown-preview-resource") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14728,7 +14728,7 @@ export default function (pi: ExtensionAPI) {
 		if (requestUrl.pathname === "/html-preview-resource") {
 			const token = requestUrl.searchParams.get("token") ?? "";
 			if (token !== serverState.token) {
-				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /studio." });
+				respondJson(res, 403, { ok: false, error: "Invalid or expired studio token. Re-run /pistol." });
 				return;
 			}
 
@@ -14753,7 +14753,7 @@ export default function (pi: ExtensionAPI) {
 
 		const token = requestUrl.searchParams.get("token") ?? "";
 		if (token !== serverState.token) {
-			respondText(res, 403, "Invalid or expired studio token. Re-run /studio.");
+			respondText(res, 403, "Invalid or expired studio token. Re-run /pistol.");
 			return;
 		}
 
@@ -15308,7 +15308,7 @@ export default function (pi: ExtensionAPI) {
 		options?: { defaultSource?: "blank" | "last-response"; commandLabel?: string },
 	): InitialStudioDocument | null => {
 		const defaultSource = options?.defaultSource === "blank" ? "blank" : "last-response";
-		const commandLabel = options?.commandLabel ?? "/studio";
+		const commandLabel = options?.commandLabel ?? "/pistol";
 		const latestAssistant =
 			extractLatestAssistantFromEntries(ctx.sessionManager.getBranch())
 				?? extractLatestAssistantFromEntries(ctx.sessionManager.getEntries())
@@ -15654,18 +15654,18 @@ export default function (pi: ExtensionAPI) {
 	) => {
 		const launchOpenFlags = parseStudioLaunchOpenFlags(trimmed);
 		if (launchOpenFlags.error) {
-			ctx.ui.notify(`${launchOpenFlags.error} Use ${options?.commandLabel ?? "/studio"} --help`, "error");
+			ctx.ui.notify(`${launchOpenFlags.error} Use ${options?.commandLabel ?? "/pistol"} --help`, "error");
 			return;
 		}
 		const launchArgs = launchOpenFlags.args;
 		if (serverState && launchOpenFlags.port && serverState.port !== launchOpenFlags.port) {
-			ctx.ui.notify(`Studio server is already running on port ${serverState.port}; requested port ${launchOpenFlags.port}. Use /studio --stop, then restart Studio with --port ${launchOpenFlags.port} to change it.`, "warning");
+			ctx.ui.notify(`Studio server is already running on port ${serverState.port}; requested port ${launchOpenFlags.port}. Use /pistol --stop, then restart Studio with --port ${launchOpenFlags.port} to change it.`, "warning");
 		}
 		if (mode === "full" && hasConnectedFullStudioView()) {
 			if (options?.replaceExistingFull) {
 				closeStudioClientsByMode("full", 4001, "Full Studio replaced");
 			} else {
-				ctx.ui.notify("A full pi Studio view is already open for this session. Close it first, use /studio-replace for a fresh full Studio view, or use /studio-editor-only for a concurrent editor-only Studio view.", "warning");
+				ctx.ui.notify("A full pi Studio view is already open for this session. Close it first, use /pistol-replace for a fresh full Studio view, or use /pistol-editor-only for a concurrent editor-only Studio view.", "warning");
 				if (serverState) {
 					const url = buildStudioUrl(serverState.port, serverState.token, "full");
 					ctx.ui.notify(`Studio URL: ${url}`, "info");
@@ -15741,60 +15741,6 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
-	pi.registerCommand("studio", {
-		description: "Open pi Studio browser UI (/studio, /studio <file>, /studio --blank, /studio --last, /studio --no-browser, /studio --port <port>)",
-		handler: async (args: string, ctx: ExtensionCommandContext) => {
-			const trimmed = args.trim();
-
-			if (trimmed === "stop" || trimmed === "--stop") {
-				await stopServer();
-				ctx.ui.notify("Stopped studio server.", "info");
-				return;
-			}
-
-			if (trimmed === "status" || trimmed === "--status") {
-				if (!serverState) {
-					ctx.ui.notify("Studio server is not running.", "info");
-					return;
-				}
-				const counts = getStudioClientCounts();
-				const url = buildStudioUrl(serverState.port, serverState.token, "full");
-				ctx.ui.notify(
-					`Studio running at ${url} (busy: ${isStudioBusy() ? "yes" : "no"}; full views: ${counts.full}; editor-only views: ${counts.editorOnly})`,
-					"info",
-				);
-				const sshTunnelHint = buildStudioSshTunnelHint(serverState.port, url);
-				if (sshTunnelHint) ctx.ui.notify(sshTunnelHint, "info");
-				return;
-			}
-
-			if (trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
-				ctx.ui.notify(
-					"Usage: /studio [path|--blank|--last]\n"
-						+ "  /studio           Open studio with last model response (fallback: blank)\n"
-						+ "  /studio <path>    Open studio with file preloaded\n"
-						+ "  /studio --blank   Open with blank editor\n"
-						+ "  /studio --last    Open with last model response\n"
-						+ "  /studio --no-browser  Print the Studio URL without opening a browser\n"
-						+ "  /studio --port <port> Bind Studio to a fixed localhost port when starting\n"
-						+ "  /studio --open-remote  Over SSH, open the remote browser anyway\n"
-						+ "  /studio --status  Show studio status\n"
-						+ "  /studio --stop    Stop studio server\n"
-						+ "  Note: only one full /studio view is allowed per Pi session.\n"
-						+ "  /studio-replace [path]  Replace the current full Studio view with a new one\n"
-						+ "  /studio-editor-only [path]  Open another Studio tab in editor-only mode\n"
-						+ "  /studio-current <path>  Load a file into currently open Studio tab(s)\n"
-						+ "  /studio-pdf [path]      Export a file or last response via Studio PDF\n"
-						+ "  /studio-html [path]     Export a file or last response via Studio preview HTML",
-					"info",
-				);
-				return;
-			}
-
-			await openStudioView(trimmed, ctx, "full", { defaultSource: "last-response", commandLabel: "/studio" });
-		},
-	});
-
 	pi.registerCommand("pistol", {
 		description: "Open the Pistol browser UI (/pistol, /pistol <file>, /pistol --blank, /pistol --last, /pistol --no-browser, /pistol --port <port>)",
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
@@ -15849,19 +15795,19 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("studio-replace", {
-		description: "Replace the current full pi Studio view (/studio-replace, /studio-replace <file>, /studio-replace --no-browser)",
+	pi.registerCommand("pistol-replace", {
+		description: "Replace the current full pi Studio view (/pistol-replace, /pistol-replace <file>, /pistol-replace --no-browser)",
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
 			const trimmed = args.trim();
 			if (trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
 				ctx.ui.notify(
-					"Usage: /studio-replace [path|--blank|--last]\n"
-						+ "  /studio-replace         Replace the current full Studio view (default: last response, fallback: blank)\n"
-						+ "  /studio-replace <path>  Replace the current full Studio view with file preloaded\n"
-						+ "  /studio-replace --blank Replace with blank editor\n"
-						+ "  /studio-replace --last  Replace with last model response\n"
-						+ "  /studio-replace --no-browser  Print URL without opening a browser\n"
-						+ "  /studio-replace --port <port> Bind Studio to a fixed localhost port when starting\n"
+					"Usage: /pistol-replace [path|--blank|--last]\n"
+						+ "  /pistol-replace         Replace the current full Studio view (default: last response, fallback: blank)\n"
+						+ "  /pistol-replace <path>  Replace the current full Studio view with file preloaded\n"
+						+ "  /pistol-replace --blank Replace with blank editor\n"
+						+ "  /pistol-replace --last  Replace with last model response\n"
+						+ "  /pistol-replace --no-browser  Print URL without opening a browser\n"
+						+ "  /pistol-replace --port <port> Bind Studio to a fixed localhost port when starting\n"
 						+ "Editor-only Studio views stay open.",
 					"info",
 				);
@@ -15870,42 +15816,42 @@ export default function (pi: ExtensionAPI) {
 
 			await openStudioView(trimmed, ctx, "full", {
 				defaultSource: "last-response",
-				commandLabel: "/studio-replace",
+				commandLabel: "/pistol-replace",
 				replaceExistingFull: true,
 			});
 		},
 	});
 
-	pi.registerCommand("studio-editor-only", {
-		description: "Open pi Studio in editor-only mode (/studio-editor-only, /studio-editor-only <file>, /studio-editor-only --no-browser)",
+	pi.registerCommand("pistol-editor-only", {
+		description: "Open pi Studio in editor-only mode (/pistol-editor-only, /pistol-editor-only <file>, /pistol-editor-only --no-browser)",
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
 			const trimmed = args.trim();
 			if (trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
 				ctx.ui.notify(
-					"Usage: /studio-editor-only [path|--blank|--last]\n"
-						+ "  /studio-editor-only         Open an editor-only Studio view (default: blank editor)\n"
-						+ "  /studio-editor-only <path>  Open an editor-only Studio view with file preloaded\n"
-						+ "  /studio-editor-only --blank Open with blank editor\n"
-						+ "  /studio-editor-only --last  Open with last model response loaded into the editor\n"
-						+ "  /studio-editor-only --no-browser  Print URL without opening a browser\n"
-						+ "  /studio-editor-only --port <port> Bind Studio to a fixed localhost port when starting\n"
+					"Usage: /pistol-editor-only [path|--blank|--last]\n"
+						+ "  /pistol-editor-only         Open an editor-only Studio view (default: blank editor)\n"
+						+ "  /pistol-editor-only <path>  Open an editor-only Studio view with file preloaded\n"
+						+ "  /pistol-editor-only --blank Open with blank editor\n"
+						+ "  /pistol-editor-only --last  Open with last model response loaded into the editor\n"
+						+ "  /pistol-editor-only --no-browser  Print URL without opening a browser\n"
+						+ "  /pistol-editor-only --port <port> Bind Studio to a fixed localhost port when starting\n"
 						+ "Multiple editor-only views are allowed in the same Pi session.",
 					"info",
 				);
 				return;
 			}
 
-			await openStudioView(trimmed, ctx, "editor-only", { defaultSource: "blank", commandLabel: "/studio-editor-only" });
+			await openStudioView(trimmed, ctx, "editor-only", { defaultSource: "blank", commandLabel: "/pistol-editor-only" });
 		},
 	});
 
-	pi.registerCommand("studio-pdf", {
-		description: "Export a file or the last model response to PDF via the Studio PDF pipeline (/studio-pdf [file])",
+	pi.registerCommand("pistol-pdf", {
+		description: "Export a file or the last model response to PDF via the Studio PDF pipeline (/pistol-pdf [file])",
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
 			const trimmed = args.trim();
 			if (trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
 				ctx.ui.notify(
-					"Usage: /studio-pdf [path] [options]\n"
+					"Usage: /pistol-pdf [path] [options]\n"
 						+ "  Without a path, export the last model response to studio-response-<timestamp>.studio.pdf.\n"
 						+ "  With a path, export a local Markdown/LaTeX/code file to <name>.studio.pdf using the Studio PDF pipeline.\n"
 						+ "Options:\n"
@@ -15944,7 +15890,7 @@ export default function (pi: ExtensionAPI) {
 				await ctx.waitForIdle();
 				const response = resolveLastModelResponseForExport(ctx);
 				if (!response) {
-					ctx.ui.notify("No last model response to export. Use /studio-pdf <path> or run a prompt first.", "warning");
+					ctx.ui.notify("No last model response to export. Use /pistol-pdf <path> or run a prompt first.", "warning");
 					return;
 				}
 				if (response.markdown.length > PDF_EXPORT_MAX_CHARS) {
@@ -16054,13 +16000,13 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("studio-html", {
-		description: "Export a file or the last model response to standalone HTML via the Studio preview pipeline (/studio-html [file])",
+	pi.registerCommand("pistol-html", {
+		description: "Export a file or the last model response to standalone HTML via the Studio preview pipeline (/pistol-html [file])",
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
 			const trimmed = args.trim();
 			if (trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
 				ctx.ui.notify(
-					"Usage: /studio-html [path]\n"
+					"Usage: /pistol-html [path]\n"
 						+ "  Without a path, export the last model response to studio-response-<timestamp>.studio.html.\n"
 						+ "  With a path, export a local Markdown/LaTeX/code file to <name>.studio.html using the Studio preview HTML pipeline.",
 					"info",
@@ -16072,7 +16018,7 @@ export default function (pi: ExtensionAPI) {
 				await ctx.waitForIdle();
 				const response = resolveLastModelResponseForExport(ctx);
 				if (!response) {
-					ctx.ui.notify("No last model response to export. Use /studio-html <path> or run a prompt first.", "warning");
+					ctx.ui.notify("No last model response to export. Use /pistol-html <path> or run a prompt first.", "warning");
 					return;
 				}
 				if (response.markdown.length > HTML_EXPORT_MAX_CHARS) {
@@ -16196,13 +16142,13 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("studio-current", {
+	pi.registerCommand("pistol-current", {
 		description: "Load a file into current open Studio tab(s) without opening a new browser session",
 		handler: async (args: string, ctx: ExtensionCommandContext) => {
 			const trimmed = args.trim();
 			if (!trimmed || trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
 				ctx.ui.notify(
-					"Usage: /studio-current <path>\n"
+					"Usage: /pistol-current <path>\n"
 						+ "  Load a file into currently open Studio tab(s) without opening a new browser window.",
 					"info",
 				);
@@ -16222,7 +16168,7 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			if (!serverState || serverState.clients.size === 0) {
-				ctx.ui.notify("No open Studio tab is connected. Run /studio first.", "warning");
+				ctx.ui.notify("No open Studio tab is connected. Run /pistol first.", "warning");
 				return;
 			}
 

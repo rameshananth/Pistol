@@ -1,6 +1,6 @@
 {
   "name": "pistol",
-  "version": "4.0.0",
+  "version": "4.0.1",
   "description": "An iteration of pi-studio for document working: a two-pane browser workspace for pi with prompt/response editing, annotations, critiques, active quiz, prompt/response history, live previews, and tmux-backed REPL/literate REPL workflows",
   "type": "module",
   "license": "MIT",

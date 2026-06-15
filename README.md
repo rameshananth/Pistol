@@ -25,7 +25,7 @@ An iteration of [pi-studio](https://github.com/omaclaren/pi-studio) for document
 - Includes a live **Working** view for following current model/tool activity, with `All` / `Thinking` / `Tools` filters, image previews for image-producing tool outputs, plus **Load visible into editor** and **Copy visible** actions; when cycling response history, Working follows saved working details for the selected response when available, and `Cmd/Ctrl+Alt+W` switches the right pane directly to Working
 - Includes a right-pane **Changes** view for browsing the current git diff by file, previewing per-file diffs, opening changed files, loading the full diff into the editor, and copying the diff
 - Includes a right-pane **Files** view for browsing the current Pi session/resource directory, opening folders, opening the Files root in Finder/the system file manager, loading text/code/CSV/TSV documents into the editor, previewing PDFs/images, opening PDF/image previews in a new Studio tab, converting DOCX/ODT documents to editable Markdown when Pandoc is available after confirmation, copying paths, setting the current folder as the Studio working directory, and revealing files in the file manager
-- Includes an optional tmux-backed **REPL** view for Shell, Python, IPython, Julia, R, GHCi, and Clojure sessions, with Raw/Literate send modes, `Cmd/Ctrl+Shift+Enter` **Send to REPL**, session start/stop/interrupt controls, a compact refresh-persistent **Studio REPL Record** of user and Pi-sent code, a secondary raw tmux mirror, agent-facing `studio_repl_status` / `studio_repl_send` tools, and Markdown/PDF/HTML export
+- Includes an optional tmux-backed **REPL** view for Shell, Python, IPython, Julia, R, GHCi, and Clojure sessions, with Raw/Literate send modes, `Cmd/Ctrl+Shift+Enter` **Send to REPL**, session start/stop/interrupt controls, a compact refresh-persistent **Studio REPL Record** of user and Pi-sent code, a secondary raw tmux mirror, agent-facing `pistol_repl_status` / `pistol_repl_send` tools, and Markdown/PDF/HTML export
 - Includes a local persistent scratchpad for quick notes you want to keep out of the main editor until you're ready to copy or insert them, with a **Recent…** picker for recovering scratchpads saved under earlier file/draft identities
 - Includes a docked **Outline** rail for navigating document structure in the current editor text, with clickable entries that jump in the raw editor and reveal matching preview locations when available
 - Restores the current browser-tab editor workspace after refresh and provides an explicit **Reset editor** action when you want to discard the restored draft and return the tab to a fresh blank draft without changing responses or saved files
@@ -45,7 +45,7 @@ An iteration of [pi-studio](https://github.com/omaclaren/pi-studio) for document
 - Embeds local PDFs in Studio Markdown previews via explicit `studio-pdf` fenced blocks, with a Focus action for temporarily enlarging the embedded viewer
 - Ships optional `pistol-dark` and `pistol-light` themes tuned for Studio's browser workspace
 - Exports right-pane preview as PDF (pandoc + LaTeX) or standalone HTML into the source file directory, Studio working directory, or Pi session directory; PDF export can open in a Studio preview tab or the default PDF viewer, and HTML export can open in the default browser or in a new Studio editor tab for inspection/commenting, while preserving authored HTML previews as HTML and rendering CSV/TSV editor previews as tables
-- Exports local files headlessly via `/studio-pdf <path>` to `<name>.studio.pdf` or `/studio-html <path>` to `<name>.studio.html`; without a path, those commands export the last model response to a timestamped file. Agent tools `studio_export_pdf` and `studio_export_html` expose the same export pipeline for remote/Telegram-style sessions.
+- Exports local files headlessly via `/pistol-pdf <path>` to `<name>.studio.pdf` or `/pistol-html <path>` to `<name>.studio.html`; without a path, those commands export the last model response to a timestamped file. Agent tools `pistol_export_pdf` and `pistol_export_html` expose the same export pipeline for remote/Telegram-style sessions.
 - Shows model/session/context usage in the footer, plus a compact-context action
 
 ## Commands
@@ -53,27 +53,18 @@ An iteration of [pi-studio](https://github.com/omaclaren/pi-studio) for document
 | Command | Description |
 |---|---|
 | `/pistol` | Open with last assistant response (fallback: blank) |
-| `/studio` | Alias for `/pistol` |
-| `/studio <path>` | Open with file preloaded |
-| `/studio --last` | Force last response |
-| `/studio --blank` | Force blank editor |
-| `/studio --no-browser` | Start/print the Studio URL without opening a browser, useful for forwarded or phone/browser sessions |
-| `/studio --port <port>` | Bind Studio to a fixed localhost port instead of a random free port |
-| `/studio --status` | Show studio server status |
-| `/studio --stop` | Stop studio server |
-| `/studio --help` | Show help |
-| `/studio-replace [path\|--blank\|--last]` | Replace the current full Studio view with a new full Studio view |
-| `/studio-editor-only [path\|--blank\|--last]` | Open an editor-only Studio view; multiple editor-only views may be open at once |
-| `/studio-current <path>` | Load a file into currently open Studio tab(s) without opening a new browser window |
-| `/studio-pdf [path] [options]` | Export a local file, or the last model response when no path is given, via the Studio PDF pipeline |
-| `/studio-html [path]` | Export a local file, or the last model response when no path is given, to standalone HTML via the Studio preview pipeline |
+| `/pistol-replace` | Replace the current full Pistol view with a new full Pistol view |
+| `/pistol-editor-only` | Open an editor-only Pistol view; multiple editor-only views may be open at once |
+| `/pistol-current <path>` | Load a file into currently open Pistol tab(s) without opening a new browser window |
+| `/pistol-pdf [path] [options]` | Export a local file, or the last model response when no path is given, via the Pistol PDF pipeline |
+| `/pistol-html [path]` | Export a local file, or the last model response when no path is given, to standalone HTML via the Pistol preview pipeline |
 
 ## Agent tools
 
 | Tool | Description |
 |---|---|
-| `studio_export_pdf` | Export direct Markdown/LaTeX, a local file, or the last model response to PDF. Defaults to writing a file without opening a viewer. |
-| `studio_export_html` | Export direct Markdown/LaTeX, a local file, or the last model response to standalone HTML. Defaults to writing a file without opening a viewer. |
+| `pistol_export_pdf` | Export direct Markdown/LaTeX, a local file, or the last model response to PDF. Defaults to writing a file without opening a viewer. |
+| `pistol_export_html` | Export direct Markdown/LaTeX, a local file, or the last model response to standalone HTML. Defaults to writing a file without opening a viewer. |
 
 ## Install
 
@@ -116,8 +107,8 @@ caption: Optional caption
 ## Notes
 
 - Local-only server (`127.0.0.1`) with tokenized Studio URLs.
-- For remote SSH sessions, keep Studio bound to localhost and use SSH local port forwarding; `/studio` and `/studio --status` print the full tokenized localhost URL. The SSH hint repeats the full URL so it is visible even if your terminal only shows the latest notification. Open that URL through the tunnel, preserving the `?token=...` parameter. If SSH is not auto-detected, use `/studio --no-browser`; for stable forwarding, use `/studio --port <port>` or combine them, e.g. `/studio --no-browser --port 3417`.
-- Full Studio is a singleton per Pi session: use `/studio` to open it, `/studio-replace` to explicitly replace it, and `/studio-editor-only` for extra editing/preview tabs that do not take over the full Studio session view.
+- For remote SSH sessions, keep Studio bound to localhost and use SSH local port forwarding; `/pistol` and `/pistol --status` print the full tokenized localhost URL. The SSH hint repeats the full URL so it is visible even if your terminal only shows the latest notification. Open that URL through the tunnel, preserving the `?token=...` parameter. If SSH is not auto-detected, use `/pistol --no-browser`; for stable forwarding, use `/pistol --port <port>` or combine them, e.g. `/pistol --no-browser --port 3417`.
+- Full Studio is a singleton per Pi session: use `/pistol` to open it, `/pistol-replace` to explicitly replace it, and `/pistol-editor-only` for extra editing/preview tabs that do not take over the full Studio session view.
 - Studio is designed as a complement to terminal pi, not a replacement.
 - Installing pistol makes the optional `pistol-dark` and `pistol-light` themes available in pi's theme selector; it does not change your active theme.
 - Use `/pistol` to open the workspace.
