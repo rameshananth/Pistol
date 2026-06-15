@@ -91,6 +91,10 @@
       const blade1ViewSelect = document.getElementById("blade1ViewSelect");
       const blade1FocusBtn = document.getElementById("blade1FocusBtn");
       const blade1ReferenceBadgeEl = document.getElementById("blade1ReferenceBadge");
+      const projectCloneUrlInput = document.getElementById("projectCloneUrlInput");
+      const projectCloneTargetInput = document.getElementById("projectCloneTargetInput");
+      const projectCloneBtn = document.getElementById("projectCloneBtn");
+      const projectSyncBtn = document.getElementById("projectSyncBtn");
       const blade1FilesBodyEl = document.getElementById("blade1FilesBody");
       const topicRootPaneEl = document.getElementById("topicRootPane");
       const topicRootPickBtn = document.getElementById("topicRootPickBtn");
@@ -116,6 +120,7 @@
       const blade3EditBtn = document.getElementById("blade3EditBtn");
       const blade3SaveBtn = document.getElementById("blade3SaveBtn");
       const blade3CommitBtn = document.getElementById("blade3CommitBtn");
+      const blade3IterateBtn = document.getElementById("blade3IterateBtn");
       const exportPdfBtn = document.getElementById("exportPdfBtn");
       const historyPrevBtn = document.getElementById("historyPrevBtn");
       const historyNextBtn = document.getElementById("historyNextBtn");
@@ -294,7 +299,7 @@
 
       function getInitialRightView(source) {
         if (isEditorOnlyMode) return "editor-preview";
-        return String(source || "").trim() === "file" ? "editor-preview" : "preview";
+        return "changes";
       }
 
       let editorView = "markdown";
@@ -335,6 +340,7 @@
         message: "",
         level: "info",
       };
+      let gitChangesPreviewRenderNonce = 0;
       const TRACE_OUTPUT_PREVIEW_MAX_LINES = 50;
       const TRACE_OUTPUT_PREVIEW_MAX_CHARS = 8000;
       const TRACE_IMAGE_SAFE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
@@ -2123,6 +2129,19 @@
       let projectSelectedPath = "";
       let projectTreeEntries = [];
       let topicsRootHandle = null;
+      let gitPullState = {
+        status: "idle",
+        requestId: "",
+        repoRoot: "",
+        branch: "",
+        hasHead: true,
+        message: "",
+        level: "info",
+      };
+      let lastAnnotatedSnapshot = "";
+      let lastIterateAnnotationSummary = "";
+      let annotatedSnapshotByPath = new Map();
+      let pendingIterateState = null;
       let topicsRootLabel = "";
       let topicsFolderNames = [];
       let selectedTopicName = "";
@@ -2626,6 +2645,7 @@
         if (openCompanionBtn) actionLineTwoEl.appendChild(openCompanionBtn);
         if (blade3SaveBtn) actionsEl.appendChild(blade3SaveBtn);
         if (blade3CommitBtn) actionsEl.appendChild(blade3CommitBtn);
+        if (blade3IterateBtn) actionsEl.appendChild(blade3IterateBtn);
         const replActionLineEl = makeStudioUiRefreshElement("div", "studio-refresh-action-line repl-action-line");
         replActionLineEl.hidden = true;
         if (sendReplBtn) replActionLineEl.appendChild(sendReplBtn);
@@ -2863,6 +2883,11 @@
         if (kind === "open_editor_only") return "opening companion editor";
         if (kind === "refresh_from_disk") return "refreshing from disk";
         if (kind === "save_as" || kind === "save_over") return "saving editor text";
+        if (kind === "clone_project") return "cloning repository";
+        if (kind === "git_pull") return "pulling latest changes";
+        if (kind === "iterate") return "iterating annotations";
+        if (kind === "accept_changes") return "accepting changes";
+        if (kind === "track_changes") return "tracking untracked changes";
         return "submitting request";
       }
 
@@ -10293,6 +10318,219 @@
         }).join("\n") + "</code></pre>";
       }
 
+      function getGitChangesSelectedFileAbsPath(file) {
+        const repoRoot = String(gitChangesState.repoRoot || "").replace(/\/$/, "");
+        const path = String(file && file.path || "").trim();
+        return repoRoot && path ? repoRoot + "/" + path : "";
+      }
+
+      function getGitChangesProjectContributorName() {
+        const repoRoot = String(gitChangesState.repoRoot || (fileBrowserState && fileBrowserState.rootDir) || getCurrentResourceDirValue() || globalThis.PROJECT_ROOT || "project").trim();
+        return "pistol@" + basenameForStudioPath(repoRoot || "project");
+      }
+
+      function hasStudioWorkingDirectory() {
+        return Boolean(String(getCurrentResourceDirValue() || "").trim());
+      }
+
+      function hasUntrackedGitChanges() {
+        return getGitChangedFiles().some((file) => String(file && file.status || "") === "untracked");
+      }
+
+      function getUntrackedGitChangePaths() {
+        return getGitChangedFiles()
+          .filter((file) => String(file && file.status || "") === "untracked")
+          .map((file) => String(file && file.path || "").trim())
+          .filter(Boolean);
+      }
+
+      function buildTrackUntrackedChangesScaffold() {
+        const projectRoot = String(gitChangesState.repoRoot || (fileBrowserState && fileBrowserState.rootDir) || getCurrentResourceDirValue() || globalThis.PROJECT_ROOT || "").trim();
+        const contributorName = getGitChangesProjectContributorName();
+        const paths = getUntrackedGitChangePaths();
+        const pathLines = paths.length ? paths.map((path) => "- " + path).join("\n") : "- (no untracked files listed)";
+        return [
+          "Project: " + projectRoot,
+          "Contributor: " + contributorName,
+          "",
+          "Track changes scaffold:",
+          "- Start tracking the untracked files below.",
+          "- Stage them in the main working folder with git add <paths> or git add -A.",
+          "- Do not commit yet unless explicitly asked.",
+          "",
+          "Untracked files:",
+          pathLines,
+          "",
+          "Return a short summary confirming which files are now tracked.",
+        ].join("\n");
+      }
+
+      function syncGitChangesActionButtons() {
+        if (!critiqueViewEl) return;
+        const acceptBtn = critiqueViewEl.querySelector("[data-git-change-action='accept']");
+        const trackBtn = critiqueViewEl.querySelector("[data-git-change-action='track']");
+        const hasWorkingDir = hasStudioWorkingDirectory();
+        const hasChangedFiles = Array.isArray(gitChangesState.files) && gitChangesState.files.length > 0;
+        const hasUntrackedFiles = hasUntrackedGitChanges();
+        if (acceptBtn) {
+          acceptBtn.disabled = uiBusy || gitChangesState.status === "loading" || !hasWorkingDir || !hasChangedFiles;
+          acceptBtn.title = !hasWorkingDir
+            ? "Set the working directory first."
+            : (hasChangedFiles
+              ? "Accept the AI changes, then reload the current document in the left pane."
+              : "No changed files to accept.");
+        }
+        if (trackBtn) {
+          trackBtn.hidden = !hasUntrackedFiles;
+          trackBtn.disabled = uiBusy || gitChangesState.status === "loading" || !hasWorkingDir || !hasUntrackedFiles;
+          trackBtn.title = !hasWorkingDir
+            ? "Set the working directory first."
+            : (hasUntrackedFiles
+              ? "Start tracking untracked files."
+              : "No untracked files.");
+        }
+      }
+
+      function buildGitChangesAcceptScaffold(annotationSummaryText) {
+        const repoRoot = String(gitChangesState.repoRoot || (fileBrowserState && fileBrowserState.rootDir) || getCurrentResourceDirValue() || globalThis.PROJECT_ROOT || "").trim();
+        const contributorName = getGitChangesProjectContributorName();
+        const files = getGitChangedFiles();
+        const fileSummary = files.length
+          ? files.map((file) => "- " + String(file.path || "") + (file.status ? " (" + String(file.status) + ")" : "")).join("\n")
+          : "- (no changed files listed)";
+        const annotations = String(annotationSummaryText || lastIterateAnnotationSummary || "").trim() || "- (no annotation summary available)";
+        const commitMessage = [
+          "Apply annotation updates",
+          "",
+          "Annotation summary:",
+          annotations,
+        ].join("\n");
+        return [
+          "Project: " + repoRoot,
+          "Contributor: " + contributorName,
+          "",
+          "Commit message (use exactly this text):",
+          commitMessage,
+          "",
+          "Accept changes scaffold:",
+          "- Stage all changes in the main working folder of the project with git add -A.",
+          "- Commit the whole project root at \"" + repoRoot + "\".",
+          "- Use the contributor name " + contributorName + " for git identity.",
+          "- Use the commit message above verbatim, including the annotation summary body.",
+          "- Include the AI-generated changes currently shown in Git changes.",
+          "",
+          "Changed files:",
+          fileSummary,
+          "",
+          "Return the commit hash and a short summary of what was committed.",
+        ].join("\n");
+      }
+
+      async function renderGitChangesMarkdownPreview(targetEl, markdown, title, sourcePath, resourceDir, requestId) {
+        const token = getToken();
+        if (!token) throw new Error("Missing Studio token in URL.");
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        const timeoutId = controller ? window.setTimeout(() => controller.abort(), 8000) : null;
+        try {
+          const response = await fetch("/render-preview?token=" + encodeURIComponent(token), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ markdown: String(markdown || ""), sourcePath: String(sourcePath || ""), resourceDir: String(resourceDir || "") }),
+            signal: controller ? controller.signal : undefined,
+          });
+          const rawBody = await response.text();
+          let payload = null;
+          try {
+            payload = rawBody ? JSON.parse(rawBody) : null;
+          } catch {
+            payload = null;
+          }
+          if (!response.ok) {
+            const message = payload && typeof payload.error === "string" ? payload.error : "Preview request failed with HTTP " + response.status + ".";
+            throw new Error(message);
+          }
+          if (!payload || payload.ok !== true || typeof payload.html !== "string") {
+            const message = payload && typeof payload.error === "string" ? payload.error : "Preview renderer returned an invalid payload.";
+            throw new Error(message);
+          }
+          if (requestId !== gitChangesPreviewRenderNonce || rightView !== "changes") return false;
+          clearPreviewJumpHighlight(targetEl);
+          finishPreviewRender(targetEl);
+          targetEl.innerHTML = sanitizeRenderedHtml(payload.html, markdown, { stripMarkdownHtmlComments: true });
+          await renderMermaidInElement(targetEl);
+          await renderMathFallbackInElement(targetEl);
+          decorateCopyablePreviewBlocks(targetEl);
+          decorateMarkdownPreviewImages(targetEl, { sourcePath: String(sourcePath || ""), resourceDir: String(resourceDir || "") });
+          decoratePreviewImages(targetEl);
+          return true;
+        } finally {
+          if (timeoutId) window.clearTimeout(timeoutId);
+        }
+      }
+
+      async function renderGitChangesSelectedFilePreview() {
+        if (!critiqueViewEl || rightView !== "changes") return;
+        const previewPaneEl = critiqueViewEl.querySelector(".git-changes-diff-pane");
+        if (!previewPaneEl) return;
+        const selected = getSelectedGitChangedFile();
+        const repoRoot = String(gitChangesState.repoRoot || "").trim();
+        const selectedPath = selected && selected.path ? String(selected.path) : "";
+        const status = selected && selected.status ? String(selected.status) : "";
+        if (!selectedPath) {
+          previewPaneEl.innerHTML = "<div class='git-changes-empty'>Select a changed file.</div>";
+          return;
+        }
+        if (!repoRoot) {
+          previewPaneEl.innerHTML = "<div class='git-changes-empty'>No project root available for preview.</div>";
+          return;
+        }
+        if (status === "deleted") {
+          previewPaneEl.innerHTML = "<div class='git-changes-empty'>This file was deleted. Open the diff to inspect the removed content.</div>";
+          return;
+        }
+        if (status === "binary") {
+          previewPaneEl.innerHTML = "<div class='git-changes-empty'>Binary file preview unavailable. Use Open file.</div>";
+          return;
+        }
+        const requestId = ++gitChangesPreviewRenderNonce;
+        previewPaneEl.innerHTML = "<div class='git-changes-empty'>Loading preview…</div>";
+        const absPath = getGitChangesSelectedFileAbsPath(selected);
+        let payload;
+        try {
+          payload = await fetchPreviewLocalLink("document", absPath, { sourcePath: absPath, resourceDir: repoRoot });
+        } catch (error) {
+          if (requestId !== gitChangesPreviewRenderNonce || rightView !== "changes") return;
+          const detail = error && error.message ? error.message : String(error || "unknown error");
+          previewPaneEl.innerHTML = "<div class='git-changes-empty'>Could not preview <strong>" + escapeHtml(selectedPath) + "</strong>: " + escapeHtml(detail) + "</div>";
+          return;
+        }
+        if (requestId !== gitChangesPreviewRenderNonce || rightView !== "changes") return;
+        const text = typeof payload.text === "string" ? payload.text : "";
+        const label = typeof payload.label === "string" && payload.label.trim() ? payload.label.trim() : selectedPath;
+        const previewLanguage = detectLanguageFromName(selectedPath || label || "");
+        const previewContext = { sourcePath: absPath, resourceDir: repoRoot };
+        if (previewLanguage === "html" || isHtmlArtifactPreviewText(text, previewLanguage)) {
+          renderHtmlArtifactPreview(previewPaneEl, text, "response", { title: label, commentable: false, ...previewContext });
+          return;
+        }
+        if (renderDelimitedTextPreview(previewPaneEl, text, "response", previewLanguage)) {
+          return;
+        }
+        if (previewLanguage === "markdown" || previewLanguage === "latex") {
+          try {
+            const rendered = await renderGitChangesMarkdownPreview(previewPaneEl, text, label, absPath, repoRoot, requestId);
+            if (requestId !== gitChangesPreviewRenderNonce || rightView !== "changes") return;
+            if (rendered) return;
+          } catch (error) {
+            if (requestId !== gitChangesPreviewRenderNonce || rightView !== "changes") return;
+            const detail = error && error.message ? error.message : String(error || "preview failed");
+            previewPaneEl.innerHTML = "<div class='git-changes-empty'>Markdown preview failed: " + escapeHtml(detail) + "</div>";
+            return;
+          }
+        }
+        renderCodePreviewWithCommentBlocks(previewPaneEl, text, "response", previewLanguage || "text");
+      }
+
       function buildGitChangesPanelHtml() {
         const files = getGitChangedFiles();
         const selected = getSelectedGitChangedFile();
@@ -10320,10 +10558,18 @@
               + "</button>";
           }).join("")
           : "<div class='git-changes-empty'>" + escapeHtml(isLoading ? "Loading git changes…" : (gitChangesState.message || "No uncommitted git changes.")) + "</div>";
-        const selectedDiff = selected && selected.diff ? String(selected.diff) : String(gitChangesState.content || "");
         const selectedStatus = selected ? String(selected.status || "modified") : "";
         const selectedCanOpen = selected && selectedStatus !== "deleted" && gitChangesState.repoRoot;
         const selectedAbsPath = selectedCanOpen ? String(gitChangesState.repoRoot).replace(/\/$/, "") + "/" + String(selected.path || "") : "";
+        const hasWorkingDir = hasStudioWorkingDirectory();
+        const hasUntrackedFiles = hasUntrackedGitChanges();
+        const pullNotice = gitPullState.status !== "idle"
+          ? "<div class='git-pull-notice git-pull-notice-" + escapeHtml(gitPullState.status) + "'>"
+            + "<div class='git-pull-notice-title'>" + escapeHtml(gitPullState.status === "loading" ? "Pull request pending" : (gitPullState.status === "error" ? "Pull request failed" : "Pull request complete")) + "</div>"
+            + "<div class='git-pull-notice-body'>" + escapeHtml(gitPullState.message || (gitPullState.status === "loading" ? "Pulling latest changes…" : "Pulled latest changes.")) + "</div>"
+            + (gitPullState.repoRoot ? "<div class='git-pull-notice-meta'>" + escapeHtml(gitPullState.repoRoot) + (gitPullState.branch ? " · " + escapeHtml(gitPullState.branch) : "") + "</div>" : "")
+            + "</div>"
+          : "";
         const notice = hasError && gitChangesState.message
           ? "<div class='git-changes-notice git-changes-notice-" + escapeHtml(gitChangesState.level || "warning") + "'>" + escapeHtml(gitChangesState.message) + "</div>"
           : "";
@@ -10336,15 +10582,15 @@
           + "</div>"
           + "<div class='git-changes-actions'>"
           + "<button type='button' data-git-change-action='refresh'" + (isLoading ? " disabled" : "") + ">Refresh</button>"
-          + "<button type='button' data-git-change-action='open' data-git-change-abs-path='" + escapeHtml(selectedAbsPath) + "'" + (selectedCanOpen ? "" : " disabled") + ">Open file</button>"
-          + "<button type='button' data-git-change-action='load'" + (gitChangesState.content ? "" : " disabled") + ">Load diff</button>"
-          + "<button type='button' data-git-change-action='copy'" + (gitChangesState.content ? "" : " disabled") + ">Copy diff</button>"
+          + "<button type='button' data-git-change-action='track'" + (!hasUntrackedFiles || !hasWorkingDir || isLoading ? " disabled" : "") + (hasUntrackedFiles ? "" : " hidden") + " title='" + escapeHtml(hasWorkingDir ? (hasUntrackedFiles ? "Start tracking untracked files." : "No untracked files.") : "Set the working directory first.") + "'>Start tracking</button>"
+          + "<button type='button' data-git-change-action='accept'" + (isLoading || !files.length || !hasWorkingDir ? " disabled" : "") + " title='" + escapeHtml(hasWorkingDir ? (files.length ? "Accept the AI changes, then reload the current document in the left pane." : "No changed files to accept.") : "Set the working directory first.") + "'>Accept changes</button>"
           + "</div>"
           + "</div>"
+          + pullNotice
           + notice
           + "<div class='git-changes-body'>"
           + "<div class='git-changes-file-list' role='list'>" + rows + "</div>"
-          + "<div class='git-changes-diff-pane'>" + (selectedDiff ? buildGitChangesDiffHtml(selectedDiff) : "<div class='git-changes-empty'>Select a changed file.</div>") + "</div>"
+          + "<div class='git-changes-diff-pane'>" + (selected ? "<div class='git-changes-empty'>Loading preview…</div>" : "<div class='git-changes-empty'>Select a changed file.</div>") + "</div>"
           + "</div>"
           + "</div>";
       }
@@ -10392,7 +10638,9 @@
         critiqueViewEl.innerHTML = buildGitChangesPanelHtml();
         critiqueViewEl.classList.remove("response-scroll-resetting");
         restoreGitChangesScrollSnapshot(scrollSnapshot, options || {});
+        syncGitChangesActionButtons();
         if (gitChangesState.status === "idle") requestGitChangesSnapshot({ preserveScroll: true });
+        void renderGitChangesSelectedFilePreview();
         scheduleResponsePaneRepaintNudge();
       }
 
@@ -10434,28 +10682,59 @@
           requestGitChangesSnapshot({ user: true, preserveScroll: true });
           return;
         }
-        if (action === "copy") {
-          const ok = await writeTextToClipboard(String(gitChangesState.content || ""));
-          setStatus(ok ? "Copied git diff." : "Clipboard write failed.", ok ? "success" : "warning");
-          return;
-        }
-        if (action === "load") {
-          if (!String(gitChangesState.content || "").trim()) {
-            setStatus("No git diff to load.", "warning");
+        if (action === "track") {
+          const projectRoot = String(gitChangesState.repoRoot || (fileBrowserState && fileBrowserState.rootDir) || getCurrentResourceDirValue() || globalThis.PROJECT_ROOT || "").trim();
+          if (!projectRoot) {
+            setStatus("Set the working directory first.", "warning");
+            if (resourceDirInput && typeof resourceDirInput.focus === "function") {
+              resourceDirInput.focus({ preventScroll: true });
+            }
             return;
           }
-          setEditorText(String(gitChangesState.content || ""), { preserveScroll: false, preserveSelection: false });
-          setSourceState({ source: "blank", label: gitChangesState.label || "git diff", path: null });
-          setEditorLanguage("diff");
-          setStatus("Loaded current git diff into editor.", "success");
+          const requestId = beginUiAction("track_changes");
+          if (!requestId) return;
+          const instruction = buildTrackUntrackedChangesScaffold();
+          const sent = sendMessage({
+            type: "send_run_request",
+            requestId,
+            text: instruction,
+          });
+          if (!sent) {
+            pendingRequestId = null;
+            pendingKind = null;
+            setBusy(false);
+          }
           return;
         }
-        if (action === "open") {
-          const absPath = actionEl.getAttribute("data-git-change-abs-path") || "";
-          if (!absPath) return;
-          await openPreviewDocumentHere(absPath, getFileBrowserLocalLinkContext(), { fallbackPath: absPath, fileBackedIntent: true });
-          ensureCurrentEditorFileBackedFromFilesPath(absPath);
-          setStatus("Opened changed file in editor.", "success");
+        if (action === "accept") {
+          const projectRoot = String(gitChangesState.repoRoot || (fileBrowserState && fileBrowserState.rootDir) || getCurrentResourceDirValue() || globalThis.PROJECT_ROOT || "").trim();
+          if (!projectRoot) {
+            setStatus("Set the working directory first.", "warning");
+            if (resourceDirInput && typeof resourceDirInput.focus === "function") {
+              resourceDirInput.focus({ preventScroll: true });
+            }
+            return;
+          }
+          const requestId = beginUiAction("accept_changes");
+          if (!requestId) return;
+          const annotationSummaryText = pendingIterateState && pendingIterateState.annotationSummaryText
+            ? pendingIterateState.annotationSummaryText
+            : lastIterateAnnotationSummary;
+          const instruction = buildGitChangesAcceptScaffold(annotationSummaryText);
+          const sent = sendMessage({
+            type: "send_run_request",
+            requestId,
+            text: instruction,
+          });
+          if (!sent) {
+            pendingRequestId = null;
+            pendingKind = null;
+            setBusy(false);
+          }
+          return;
+        }
+        if (action === "open" || action === "load" || action === "copy") {
+          setStatus("That control is hidden.", "warning");
         }
       }
 
@@ -10741,6 +11020,109 @@
         return suggestedDir + stem + ".annotated.md";
       }
 
+      function buildProjectAnnotatedSaveSuggestion() {
+        const projectRoot = normalizeStudioResourceDirValue(getCurrentResourceDirValue() || (fileBrowserState && fileBrowserState.rootDir) || "");
+        if (!projectRoot) return buildAnnotatedSaveSuggestion();
+        const projectDir = projectRoot.replace(/\/$/, "") + "/";
+        const effectivePath = getEffectiveSavePath() || sourceState.path || sourceState.label || "draft.md";
+        const parts = String(effectivePath).split(/[/\\]/);
+        const fileName = parts.pop() || "draft.md";
+        const stem = fileName.replace(/\.[^.]+$/, "") || "draft";
+        return projectDir + stem + ".annotated.md";
+      }
+
+      function collectAnnotationLines(text) {
+        return String(text || "")
+          .split(/\r?\n/)
+          .map((line) => line.trimEnd())
+          .filter((line) => /\[an:[^\]]+\]/i.test(line));
+      }
+
+      function collectInlineAnnotationEntries(text) {
+        const lines = String(text || "").split(/\r?\n/);
+        const entries = [];
+        lines.forEach((line, index) => {
+          if (!/\[an:[^\]]+\]/i.test(line)) return;
+          const match = String(line || "").match(/\[an:\s*([^\]]+)\]/i);
+          entries.push({
+            lineNumber: index + 1,
+            lineText: String(line || "").trim(),
+            annotationBody: match ? String(match[1] || "").trim() : String(line || "").trim(),
+          });
+        });
+        return entries;
+      }
+
+      function extractAnnotationNote(line) {
+        const match = String(line || "").match(/\[an:\s*([^\]]+)\]/i);
+        return match ? String(match[1] || "").trim() : String(line || "").trim();
+      }
+
+      function summarizeAnnotationLines(lines) {
+        const items = Array.isArray(lines) ? lines : [];
+        const notes = items.map(extractAnnotationNote).filter(Boolean);
+        return notes.length ? notes.map((note) => "- " + note).join("\n") : "- (no annotation notes were captured)";
+      }
+
+      function buildIterateAdditionalCommentsPrompt() {
+        const reviewNotesPrompt = buildReviewNotesPrompt().trim();
+        const inlineEntries = collectInlineAnnotationEntries(sourceTextEl.value || "");
+        const inlinePrompt = inlineEntries.length
+          ? [
+            "## Inline annotations",
+            "",
+            ...inlineEntries.map((entry, index) => [
+              "### Inline annotation " + (index + 1) + " — line " + entry.lineNumber,
+              "",
+              entry.annotationBody ? ("- " + entry.annotationBody) : "- (empty annotation)",
+              "",
+              "> " + entry.lineText.replace(/\n/g, "\n> "),
+            ].join("\n")),
+          ].join("\n")
+          : "";
+        return [reviewNotesPrompt, inlinePrompt].filter((block) => String(block || "").trim()).join("\n\n").trim();
+      }
+
+      function buildAnnotationDeltaScaffold(previousText, currentText, projectRoot, additionalCommentsText) {
+        const previousLines = new Set(collectAnnotationLines(previousText));
+        const currentLines = collectAnnotationLines(currentText);
+        const deltaLines = currentLines.filter((line) => !previousLines.has(line));
+        const projectName = basenameForStudioPath(projectRoot || "project");
+        const contributorName = "pistol@" + projectName;
+        const deltaBody = deltaLines.length ? deltaLines.map((line) => "- " + line).join("\n") : "- (no new annotation lines; review the existing saved annotations)";
+        const additionalComments = String(additionalCommentsText || "").trim() || "- (no additional comments or inline annotations were provided)";
+        return [
+          "Project: " + projectRoot,
+          "Contributor: " + contributorName,
+          "",
+          "Annotation delta:",
+          deltaBody,
+          "",
+          "Additional comments and inline annotations:",
+          additionalComments,
+          "",
+          "Address the instructions in these annotations. If you change files, stage them with contributor " + contributorName + ".",
+        ].join("\n");
+      }
+
+      function runIterateScaffold(scaffoldText) {
+        const requestId = beginUiAction("iterate");
+        if (!requestId) return false;
+        if (pendingIterateState) pendingIterateState.runRequestId = requestId;
+        const sent = sendMessage({
+          type: "send_run_request",
+          requestId,
+          text: scaffoldText,
+        });
+        if (!sent) {
+          if (pendingIterateState && pendingIterateState.runRequestId === requestId) pendingIterateState = null;
+          pendingRequestId = null;
+          pendingKind = null;
+          setBusy(false);
+        }
+        return sent;
+      }
+
       function updateSaveFileTooltip() {
         if (!saveOverBtn) return;
 
@@ -10805,6 +11187,7 @@
         if (lineNumbersSelect) lineNumbersSelect.disabled = uiBusy;
         if (annotationModeSelect) annotationModeSelect.disabled = uiBusy;
         if (saveAnnotatedBtn) saveAnnotatedBtn.disabled = uiBusy;
+        if (blade3IterateBtn) blade3IterateBtn.disabled = uiBusy;
         if (stripAnnotationsBtn) stripAnnotationsBtn.disabled = uiBusy || !hasAnnotationMarkers(sourceTextEl.value);
         if (compactBtn) compactBtn.disabled = isEditorOnlyMode || uiBusy || compactInProgress || wsState === "Disconnected";
         editorViewSelect.disabled = isEditorOnlyMode;
@@ -10816,6 +11199,7 @@
         lensSelect.disabled = uiBusy || isEditorOnlyMode;
         updateSaveFileTooltip();
         updateRefreshFromDiskTooltip();
+        syncGitChangesActionButtons();
         updateHistoryControls();
         updateResultActionButtons();
       }
@@ -10825,6 +11209,7 @@
         if (topicRootPickBtn) topicRootPickBtn.disabled = uiBusy;
         if (topicAddBtn) topicAddBtn.disabled = uiBusy || !topicsRootHandle;
         if (topicRefreshBtn) topicRefreshBtn.disabled = uiBusy;
+        syncProjectSelectionRemoteButtons();
         syncFooterSpinnerState();
         renderStatus();
         syncActionButtons();
@@ -11047,6 +11432,10 @@
         if (resourceDirLabel) resourceDirLabel.textContent = "";
         setEditorText("", { preserveScroll: false, preserveSelection: false });
         setSourceState({ source: "blank", label: "blank", path: null, draftId: makeStudioDraftId() });
+        lastAnnotatedSnapshot = "";
+        lastIterateAnnotationSummary = "";
+        annotatedSnapshotByPath = new Map();
+        pendingIterateState = null;
         setEditorLanguage("markdown");
         setEditorView("markdown");
         responseHistory = preservedResponseState.responseHistory;
@@ -19275,12 +19664,16 @@
           }
 
           const completedRequestId = typeof message.requestId === "string" ? message.requestId : pendingRequestId;
+          const completedKind = pendingKind;
           const responseKind =
             typeof message.kind === "string"
               ? message.kind
               : (pendingKind === "critique" ? "critique" : "annotation");
 
           stickyStudioKind = responseKind;
+          if (pendingIterateState && typeof completedRequestId === "string" && pendingIterateState.runRequestId === completedRequestId) {
+            pendingIterateState = null;
+          }
           pendingRequestId = null;
           pendingKind = null;
           queuedLatestResponse = null;
@@ -19309,6 +19702,11 @@
             setStatus("Response ready.", "success");
           }
           maybeShowTitleAttentionForCompletedRequest(completedRequestId, responseKind);
+          if (completedKind === "accept_changes") {
+            window.setTimeout(() => {
+              requestCurrentEditorRefreshFromDisk({ silent: true });
+            }, 0);
+          }
           return;
         }
 
@@ -19367,10 +19765,12 @@
         }
 
         if (message.type === "saved") {
-          if (typeof message.requestId === "string" && pendingRequestId === message.requestId) {
+          const savedRequestId = typeof message.requestId === "string" ? message.requestId : "";
+          const isIterateSave = Boolean(pendingIterateState && pendingIterateState.saveRequestId === savedRequestId);
+          if (savedRequestId && pendingRequestId === savedRequestId) {
             pendingRequestId = null;
             pendingKind = null;
-            clearArmedTitleAttention(message.requestId);
+            clearArmedTitleAttention(savedRequestId);
             stickyStudioKind = null;
           }
           if (message.path) {
@@ -19386,6 +19786,34 @@
               carryCurrentMetadataToNewDocument: true,
             });
             markFileBackedBaseline(sourceTextEl.value);
+            if (typeof message.path === "string" && message.path) {
+              lastAnnotatedSnapshot = sourceTextEl.value || "";
+              if (/\.annotated\.md$/i.test(message.path)) {
+                annotatedSnapshotByPath.set(message.path, lastAnnotatedSnapshot);
+              }
+            }
+          }
+          if (isIterateSave && pendingIterateState) {
+            const iterateState = pendingIterateState;
+            lastAnnotatedSnapshot = iterateState.currentContent || sourceTextEl.value || "";
+            if (iterateState.savePath) {
+              annotatedSnapshotByPath.set(iterateState.savePath, lastAnnotatedSnapshot);
+            }
+            if (iterateState.annotationSummaryText) {
+              lastIterateAnnotationSummary = iterateState.annotationSummaryText;
+            }
+            pendingIterateState = {
+              ...iterateState,
+              saveRequestPending: false,
+            };
+            setBusy(false);
+            setWsState("Ready");
+            setStatus("Saved annotated draft. Sending annotation delta to the server…", "success");
+            if (!runIterateScaffold(iterateState.scaffoldText)) {
+              pendingIterateState = null;
+              setStatus("Saved annotated draft, but could not start Iterate.", "warning");
+            }
+            return;
           }
           setBusy(false);
           setWsState("Ready");
@@ -19431,7 +19859,16 @@
           setWsState("Ready");
           if (typeof message.path === "string" && message.path) {
             globalThis.PROJECT_ROOT = message.path;
+            lastAnnotatedSnapshot = "";
+            lastIterateAnnotationSummary = "";
+            annotatedSnapshotByPath = new Map();
+            pendingIterateState = null;
+            gitPullState = { status: "idle", requestId: "", repoRoot: message.path, branch: gitPullState.branch || "", hasHead: gitPullState.hasHead, message: "", level: "info" };
+            if (resourceDirInput) resourceDirInput.value = normalizeStudioResourceDirValue(message.path);
+            applyResourceDir();
+            void loadFileBrowserDirectory(message.path, { user: false });
             syncProjectLoadButton();
+            syncProjectSelectionRemoteButtons();
           }
           setStatus(typeof message.message === "string" ? message.message : "Loaded project root.", "success");
           return;
@@ -19546,6 +19983,51 @@
           if (rightView === "changes") renderGitChangesView({ preserveScroll });
           if (ok) setStatus(files.length ? "Loaded git changes." : "No uncommitted git changes.", files.length ? "success" : "warning");
           else setStatus(gitChangesState.message || "Could not load git changes.", gitChangesState.level === "error" ? "error" : "warning");
+          return;
+        }
+
+        if (message.type === "git_pull_result") {
+          const requestId = typeof message.requestId === "string" ? message.requestId : "";
+          if (requestId && gitPullState.requestId && requestId !== gitPullState.requestId) return;
+          if (requestId && pendingRequestId === requestId) {
+            pendingRequestId = null;
+            pendingKind = null;
+            clearArmedTitleAttention(requestId);
+            stickyStudioKind = null;
+          }
+          const ok = message.ok !== false;
+          const files = Array.isArray(message.files) ? message.files : [];
+          const selectedPath = files.some((file) => String(file && file.path || "") === String(gitChangesState.selectedPath || ""))
+            ? gitChangesState.selectedPath
+            : (files[0] && files[0].path ? String(files[0].path) : "");
+          gitPullState = {
+            status: ok ? "ready" : "error",
+            requestId: "",
+            repoRoot: ok && typeof message.repoRoot === "string" ? message.repoRoot : gitPullState.repoRoot,
+            branch: ok && typeof message.branch === "string" ? message.branch : gitPullState.branch,
+            hasHead: ok ? message.hasHead !== false : gitPullState.hasHead,
+            message: typeof message.message === "string" ? message.message : "",
+            level: typeof message.level === "string" ? message.level : "info",
+          };
+          gitChangesState = {
+            status: ok ? "ready" : "error",
+            requestId: null,
+            content: ok && typeof message.content === "string" ? message.content : "",
+            label: ok && typeof message.label === "string" ? message.label : "",
+            repoRoot: ok && typeof message.repoRoot === "string" ? message.repoRoot : gitPullState.repoRoot,
+            branch: ok && typeof message.branch === "string" ? message.branch : gitPullState.branch,
+            hasHead: ok ? message.hasHead !== false : true,
+            files,
+            selectedPath,
+            message: typeof message.message === "string" ? message.message : "",
+            level: typeof message.level === "string" ? message.level : "info",
+          };
+          if (rightView === "changes") renderGitChangesView({ preserveScroll: true });
+          syncProjectSelectionRemoteButtons();
+          setBusy(false);
+          setWsState("Ready");
+          if (ok) setStatus(typeof message.message === "string" && message.message.trim() ? message.message : (files.length ? "Pulled latest changes." : "Pulled latest changes."), files.length ? "success" : "warning");
+          else setStatus(gitPullState.message || "Could not pull changes.", gitPullState.level === "error" ? "error" : "warning");
           return;
         }
 
@@ -19673,6 +20155,9 @@
             }
             pendingRequestId = null;
             pendingKind = null;
+          }
+          if (pendingIterateState && typeof message.requestId === "string" && (pendingIterateState.saveRequestId === message.requestId || pendingIterateState.runRequestId === message.requestId)) {
+            pendingIterateState = null;
           }
           if (typeof message.requestId === "string") {
             clearArmedTitleAttention(message.requestId);
@@ -20643,32 +21128,81 @@
         });
       }
 
-      if (refreshFromDiskBtn) {
-        refreshFromDiskBtn.addEventListener("click", () => {
-          if (!hasRefreshableFilePath()) {
-            setStatus("Refresh from disk needs a file path. Use Files → Open here, Files → Open file tab, or /studio-editor-only <path> for a refreshable editor tab.", "warning");
+      if (blade3IterateBtn) {
+        blade3IterateBtn.addEventListener("click", () => {
+          const projectRoot = normalizeStudioResourceDirValue(getCurrentResourceDirValue() || (fileBrowserState && fileBrowserState.rootDir) || "");
+          if (!projectRoot) {
+            setStatus("Load a project root first.", "warning");
             return;
           }
-
-          if (editorDiffersFromFileBackedBaseline()) {
-            const confirmed = window.confirm("Replace current editor contents with the latest version from disk?");
-            if (!confirmed) return;
-          }
-
-          const requestId = beginUiAction("refresh_from_disk");
-          if (!requestId) return;
-
+          const currentContent = String(sourceTextEl.value || "");
+          const annotatedSavePath = buildProjectAnnotatedSaveSuggestion();
+          const previousSnapshot = annotatedSnapshotByPath.get(annotatedSavePath) || lastAnnotatedSnapshot || "";
+          const previousLines = new Set(collectAnnotationLines(previousSnapshot));
+          const currentLines = collectAnnotationLines(currentContent);
+          const deltaLines = currentLines.filter((line) => !previousLines.has(line));
+          const annotationSummaryText = summarizeAnnotationLines(deltaLines);
+          const additionalCommentsText = buildIterateAdditionalCommentsPrompt();
+          const scaffoldText = buildAnnotationDeltaScaffold(previousSnapshot, currentContent, projectRoot, additionalCommentsText);
+          const saveRequestId = beginUiAction("save_as");
+          if (!saveRequestId) return;
+          pendingIterateState = {
+            saveRequestId,
+            projectRoot,
+            savePath: annotatedSavePath,
+            currentContent,
+            scaffoldText,
+            annotationSummaryText,
+            additionalCommentsText,
+            saveRequestPending: true,
+            runRequestId: null,
+          };
           const sent = sendMessage({
-            type: "refresh_from_disk_request",
-            requestId,
-            path: sourceState.path,
+            type: "save_as_request",
+            requestId: saveRequestId,
+            path: annotatedSavePath,
+            content: currentContent,
           });
-
           if (!sent) {
+            pendingIterateState = null;
             pendingRequestId = null;
             pendingKind = null;
             setBusy(false);
           }
+        });
+      }
+
+      function requestCurrentEditorRefreshFromDisk(options) {
+        if (!hasRefreshableFilePath()) {
+          setStatus("Reload requires a file path. Use Files → Open here, Files → Open file tab, or /studio-editor-only <path> first.", "warning");
+          return false;
+        }
+        if (editorDiffersFromFileBackedBaseline()) {
+          const confirmed = window.confirm("Replace current editor contents with the latest version from disk?");
+          if (!confirmed) return false;
+        }
+        const requestId = beginUiAction("refresh_from_disk");
+        if (!requestId) return false;
+        const sent = sendMessage({
+          type: "refresh_from_disk_request",
+          requestId,
+          path: sourceState.path,
+        });
+        if (!sent) {
+          pendingRequestId = null;
+          pendingKind = null;
+          setBusy(false);
+          return false;
+        }
+        if (options && options.silent) {
+          setStatus("Reloading document in the left pane…", "success");
+        }
+        return true;
+      }
+
+      if (refreshFromDiskBtn) {
+        refreshFromDiskBtn.addEventListener("click", () => {
+          requestCurrentEditorRefreshFromDisk();
         });
       }
 
@@ -21217,6 +21751,7 @@
         }
         updateSaveFileTooltip();
         syncActionButtons();
+        syncProjectSelectionRemoteButtons();
         renderSourcePreview();
         scheduleWorkspacePersistence();
       }
@@ -21354,6 +21889,7 @@
         }
         if (topicAddBtn) topicAddBtn.disabled = uiBusy || !topicsRootHandle;
         if (topicRefreshBtn) topicRefreshBtn.disabled = uiBusy || !topicsRootHandle;
+        syncProjectSelectionRemoteButtons();
         if (topicRootTreeEl) {
           topicRootTreeEl.replaceChildren();
           if (!projectRootHandle) {
@@ -21563,6 +22099,30 @@
         await topicHandle.getDirectoryHandle("mermaid", { create: true });
       }
 
+      function deriveGitCloneFolderName(repoUrl) {
+        const clean = String(repoUrl || "").trim().replace(/[?#].*$/, "");
+        const tail = clean.split(/[\\/:]/).pop() || "repo";
+        return tail.replace(/\.git$/i, "") || "repo";
+      }
+
+      function syncProjectSelectionRemoteButtons() {
+        const hasWorkingDir = Boolean(getCurrentResourceDirValue());
+        if (projectCloneBtn) {
+          projectCloneBtn.disabled = uiBusy || !String(projectCloneUrlInput && projectCloneUrlInput.value || "").trim();
+          projectCloneBtn.title = !String(projectCloneUrlInput && projectCloneUrlInput.value || "").trim()
+            ? "Enter a repository URL first."
+            : "Clone the repository to local disk and set the cloned folder as the working directory.";
+        }
+        if (projectSyncBtn) {
+          projectSyncBtn.disabled = uiBusy || !hasWorkingDir || gitPullState.status === "loading";
+          projectSyncBtn.title = !hasWorkingDir
+            ? "Set the working directory first."
+            : (gitPullState.status === "loading"
+              ? "Pull request pending…"
+              : "Pull the latest changes for the loaded project from its remote.");
+        }
+      }
+
       async function loadProjectRoot() {
         const dir = (fileBrowserState && fileBrowserState.rootDir) || (fileBrowserState && fileBrowserState.currentDir) || getCurrentResourceDirValue();
         if (!dir) {
@@ -21581,6 +22141,67 @@
           pendingRequestId = null;
           pendingKind = null;
           setBusy(false);
+        }
+      }
+
+      async function cloneProjectRepository() {
+        const repoUrl = String(projectCloneUrlInput && projectCloneUrlInput.value || "").trim();
+        if (!repoUrl) {
+          setStatus("Enter a GitHub repository URL to clone.", "warning");
+          if (projectCloneUrlInput && typeof projectCloneUrlInput.focus === "function") {
+            projectCloneUrlInput.focus({ preventScroll: true });
+          }
+          return;
+        }
+        const currentDir = normalizeStudioResourceDirValue(getCurrentResourceDirValue() || (fileBrowserState && fileBrowserState.rootDir) || "");
+        const typedTarget = String(projectCloneTargetInput && projectCloneTargetInput.value || "").trim();
+        const cloneTarget = typedTarget || (currentDir ? currentDir.replace(/\/$/, "") + "/" + deriveGitCloneFolderName(repoUrl) : deriveGitCloneFolderName(repoUrl));
+        const requestId = beginUiAction("clone_project");
+        if (!requestId) return;
+        const sent = sendMessage({
+          type: "clone_project_request",
+          requestId,
+          repoUrl,
+          targetDir: cloneTarget,
+        });
+        if (!sent) {
+          pendingRequestId = null;
+          pendingKind = null;
+          setBusy(false);
+        }
+      }
+
+      async function syncProjectRepository() {
+        const projectRoot = normalizeStudioResourceDirValue(getCurrentResourceDirValue() || (fileBrowserState && fileBrowserState.rootDir) || "");
+        if (!projectRoot) {
+          setStatus("Set the working directory first.", "warning");
+          return;
+        }
+        const requestId = beginUiAction("git_pull");
+        if (!requestId) return;
+        gitPullState = {
+          status: "loading",
+          requestId,
+          repoRoot: projectRoot,
+          branch: gitPullState.branch || "",
+          hasHead: gitPullState.hasHead,
+          message: "Pull request pending…",
+          level: "info",
+        };
+        setRightView("changes");
+        syncProjectSelectionRemoteButtons();
+        if (rightView === "changes") renderGitChangesView({ preserveScroll: true });
+        const sent = sendMessage({
+          type: "git_pull_request",
+          requestId,
+          path: projectRoot,
+        });
+        if (!sent) {
+          gitPullState = { ...gitPullState, status: "idle", requestId: "", message: "" };
+          pendingRequestId = null;
+          pendingKind = null;
+          setBusy(false);
+          syncProjectSelectionRemoteButtons();
         }
       }
 
@@ -21694,6 +22315,29 @@
       if (blade1ReferenceBadgeEl) {
         blade1ReferenceBadgeEl.addEventListener("click", () => { void loadProjectRoot(); });
       }
+      if (projectCloneBtn) {
+        projectCloneBtn.addEventListener("click", () => { void cloneProjectRepository(); });
+      }
+      if (projectCloneUrlInput) {
+        projectCloneUrlInput.addEventListener("input", () => { syncProjectSelectionRemoteButtons(); });
+        projectCloneUrlInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void cloneProjectRepository();
+          }
+        });
+      }
+      if (projectCloneTargetInput) {
+        projectCloneTargetInput.addEventListener("keydown", (event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void cloneProjectRepository();
+          }
+        });
+      }
+      if (projectSyncBtn) {
+        projectSyncBtn.addEventListener("click", () => { void syncProjectRepository(); });
+      }
       if (topicRootPickBtn) {
         topicRootPickBtn.addEventListener("click", () => { void pickTopicRootFolder(); });
       }
@@ -21762,6 +22406,7 @@
       }
       renderTopicWorkspace();
       renderBlade1FilesView();
+      syncProjectSelectionRemoteButtons();
       setSourceState(initialSourceState);
       refreshResponseUi();
       updateAnnotatedReplyHeaderButton();

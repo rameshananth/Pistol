@@ -34,8 +34,16 @@
       font-size: 18px;
       font-weight: 600;
       display: inline-flex;
-      align-items: baseline;
+      align-items: center;
       gap: 8px;
+    }
+
+    .app-logo,
+    .app-logo-image {
+      width: 22px;
+      height: 22px;
+      display: inline-block;
+      vertical-align: -4px;
     }
 
     .app-logo {
@@ -43,7 +51,10 @@
       font-weight: 700;
       font-size: 21px;
       line-height: 1;
-      display: inline-block;
+    }
+
+    .app-logo-image {
+      object-fit: contain;
     }
 
     .app-subtitle {
@@ -297,6 +308,42 @@
       flex: 1 1 auto;
       min-height: 0;
       overflow: hidden;
+    }
+
+    .project-clone-panel {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      background: var(--panel-2);
+    }
+
+    .project-clone-title {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .project-clone-form {
+      display: grid;
+      gap: 8px;
+    }
+
+    .project-clone-form input {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .project-clone-form button {
+      justify-self: start;
+    }
+
+    .project-clone-hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
     }
 
     #blade1FilesBody {
@@ -3256,6 +3303,40 @@
       background: var(--error-soft);
     }
 
+    .git-pull-notice {
+      margin: 10px 12px 0;
+      padding: 8px 10px;
+      border: 1px solid var(--accent-subtle, var(--control-border));
+      border-radius: 10px;
+      color: var(--text);
+      background: var(--panel);
+      font-size: 12px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .git-pull-notice-loading {
+      border-color: var(--accent);
+      background: var(--panel-2);
+    }
+
+    .git-pull-notice-error {
+      color: var(--error);
+      border-color: var(--error);
+      background: var(--error-soft);
+    }
+
+    .git-pull-notice-title {
+      font-weight: 700;
+    }
+
+    .git-pull-notice-body,
+    .git-pull-notice-meta {
+      color: var(--studio-info-text, var(--muted));
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
     .git-changes-body {
       display: grid;
       grid-template-columns: minmax(150px, clamp(170px, 28%, 260px)) minmax(0, 1fr);
@@ -5997,7 +6078,10 @@
     body.studio-ui-refresh #sendRunBtn,
     body.studio-ui-refresh #queueSteerBtn,
     body.studio-ui-refresh #sendReplBtn,
-    body.studio-ui-refresh #loadResponseBtn:not([hidden]) {
+    body.studio-ui-refresh #loadResponseBtn:not([hidden]),
+    body.studio-ui-refresh #blade3SaveBtn,
+    body.studio-ui-refresh #blade3CommitBtn,
+    body.studio-ui-refresh #blade3IterateBtn {
       height: 28px;
       min-height: 28px;
       padding: 4px 9px;
@@ -6010,6 +6094,39 @@
     body.studio-ui-refresh #queueSteerBtn,
     body.studio-ui-refresh #sendReplBtn {
       min-width: 8.6rem;
+    }
+
+    body.studio-ui-refresh #blade3SaveBtn:not(:disabled) {
+      background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+      border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    body.studio-ui-refresh #blade3SaveBtn:not(:disabled):hover {
+      background: color-mix(in srgb, var(--accent) 30%, var(--panel-2));
+    }
+
+    body.studio-ui-refresh #blade3CommitBtn:not(:disabled) {
+      background: color-mix(in srgb, var(--panel-2) 66%, var(--accent) 34%);
+      border-color: color-mix(in srgb, var(--accent) 48%, var(--border) 52%);
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    body.studio-ui-refresh #blade3CommitBtn:not(:disabled):hover {
+      background: color-mix(in srgb, var(--panel-2) 58%, var(--accent) 42%);
+    }
+
+    body.studio-ui-refresh #blade3IterateBtn:not(:disabled) {
+      background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+      border-color: color-mix(in srgb, var(--accent) 68%, var(--border));
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    body.studio-ui-refresh #blade3IterateBtn:not(:disabled):hover {
+      background: color-mix(in srgb, var(--accent) 30%, var(--panel-2));
     }
 
     body.studio-ui-refresh #queueSteerBtn:not(:disabled) {

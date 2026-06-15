@@ -1,10 +1,10 @@
 # pistol
 
-Extension for [pi](https://pi.dev) that opens a local two-pane browser workspace for working with prompts, responses, live working details, Markdown and LaTeX documents, interactive HTML previews, code files, REPL sessions, and other common text-based files side by side. Annotate responses and files, add local comments, write, edit, run prompts, send code to a REPL, browse prompt and response history, request critiques, and use live preview for code, Markdown, LaTeX, and interactive HTML.
+An iteration of [pi-studio](https://github.com/omaclaren/pi-studio) for document working. This extension for [pi](https://pi.dev) opens a local two-pane browser workspace for prompts, responses, live working details, Markdown and LaTeX documents, interactive HTML previews, code files, REPL sessions, and other common text-based files side by side. Annotate responses and files, add local comments, write, edit, run prompts, send code to a REPL, browse prompt and response history, request critiques, and use live preview for code, Markdown, LaTeX, and interactive HTML.
 
 ## Quick demo
 
-[Watch the 2-minute demo (MP4, 2x speed, no audio)](https://github.com/omaclaren/pistol/releases/latest/download/pistol-demo-2min.mp4)
+[Watch the 2-minute demo (MP4, 2x speed, no audio)](https://github.com/rameshananth/pistol/releases/latest/download/pistol-demo-2min.mp4)
 
 ## Screenshots
 
@@ -52,7 +52,8 @@ Extension for [pi](https://pi.dev) that opens a local two-pane browser workspace
 
 | Command | Description |
 |---|---|
-| `/studio` | Open with last assistant response (fallback: blank) |
+| `/pistol` | Open with last assistant response (fallback: blank) |
+| `/studio` | Alias for `/pistol` |
 | `/studio <path>` | Open with file preloaded |
 | `/studio --last` | Force last response |
 | `/studio --blank` | Force blank editor |
@@ -81,13 +82,13 @@ Extension for [pi](https://pi.dev) that opens a local two-pane browser workspace
 pi install npm:pistol
 
 # GitHub
-pi install https://github.com/omaclaren/pistol
+pi install https://github.com/rameshananth/pistol
 ```
 
 Run once without installing:
 
 ```bash
-pi -e https://github.com/omaclaren/pistol
+pi -e https://github.com/rameshananth/pistol
 ```
 
 ## Studio Markdown extras
@@ -119,6 +120,7 @@ caption: Optional caption
 - Full Studio is a singleton per Pi session: use `/studio` to open it, `/studio-replace` to explicitly replace it, and `/studio-editor-only` for extra editing/preview tabs that do not take over the full Studio session view.
 - Studio is designed as a complement to terminal pi, not a replacement.
 - Installing pistol makes the optional `pistol-dark` and `pistol-light` themes available in pi's theme selector; it does not change your active theme.
+- Use `/pistol` to open the workspace.
 - Editor/code font uses a best-effort terminal-monospace match when the current terminal config exposes it; set `PI_STUDIO_FONT_MONO` to force a specific CSS `font-family` stack. Use `PI_STUDIO_FONT_UI` or `PI_STUDIO_FONT_PROSE` to override the Studio UI or rendered-preview font stacks.
 - The optional REPL view requires `tmux`. Studio can start and stop Studio-owned `pi-studio-repl-*` sessions and can mirror detected `pi-repl-*` sessions, but it will not stop external `pi-repl-*` sessions.
 - Full preview/PDF quality depends on `pandoc` (and `xelatex` for PDF):

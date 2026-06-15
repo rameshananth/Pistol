@@ -529,6 +529,19 @@ interface GitChangesRequestMessage {
 	resourceDir?: string;
 }
 
+interface CloneProjectRequestMessage {
+	type: "clone_project_request";
+	requestId: string;
+	repoUrl: string;
+	targetDir?: string;
+}
+
+interface GitPullRequestMessage {
+	type: "git_pull_request";
+	requestId: string;
+	path?: string;
+}
+
 interface CreateTopicRequestMessage {
 	type: "create_topic_request";
 	requestId: string;
@@ -592,6 +605,8 @@ type IncomingStudioMessage =
 	| SendToEditorRequestMessage
 	| GetFromEditorRequestMessage
 	| GitChangesRequestMessage
+	| CloneProjectRequestMessage
+	| GitPullRequestMessage
 	| CreateTopicRequestMessage
 	| GitCommitRequestMessage
 	| LoadProjectRequestMessage
@@ -4401,14 +4416,20 @@ function resolveStudioGitRepoRootForPath(filePath: string): { repoRoot: string; 
 	return { repoRoot: projectRootCandidate || dirname(filePath), needsInit: true };
 }
 
+function getStudioProjectContributorName(repoRoot: string): string {
+	const projectName = basename(repoRoot).trim() || "project";
+	return `pistol@${projectName}`;
+}
+
 function ensureStudioGitIdentity(repoRoot: string): void {
+	const contributorName = getStudioProjectContributorName(repoRoot);
 	const name = spawnSync("git", ["config", "--get", "user.name"], { cwd: repoRoot, encoding: "utf-8" });
 	if (name.status !== 0 || !String(name.stdout ?? "").trim()) {
-		spawnSync("git", ["config", "user.name", "pistol"], { cwd: repoRoot, encoding: "utf-8" });
+		spawnSync("git", ["config", "user.name", contributorName], { cwd: repoRoot, encoding: "utf-8" });
 	}
 	const email = spawnSync("git", ["config", "--get", "user.email"], { cwd: repoRoot, encoding: "utf-8" });
 	if (email.status !== 0 || !String(email.stdout ?? "").trim()) {
-		spawnSync("git", ["config", "user.email", "pistol@example.com"], { cwd: repoRoot, encoding: "utf-8" });
+		spawnSync("git", ["config", "user.email", `${contributorName}@example.com`], { cwd: repoRoot, encoding: "utf-8" });
 	}
 }
 
@@ -4482,6 +4503,120 @@ function commitStudioGitChange(filePath: string, content: string, summary: strin
 		message: commitHash
 			? `Committed ${basename(resolved.resolved)}${hasHead ? "" : " (initial commit)"} to PROJECT_ROOT as ${commitHash}.`
 			: `Committed ${basename(resolved.resolved)}.`,
+	};
+}
+
+function deriveStudioGitCloneTargetName(repoUrl: string): string {
+	const cleaned = String(repoUrl || "").trim().replace(/[?#].*$/, "");
+	const tail = cleaned.split(/[\\/:]/).pop() || "repo";
+	return tail.replace(/\.git$/i, "") || "repo";
+}
+
+function cloneStudioGitRepository(repoUrl: string, targetDir: string | undefined, cwd: string):
+	| { ok: true; repoRoot: string; message: string }
+	| { ok: false; message: string } {
+	const url = String(repoUrl || "").trim();
+	if (!url) return { ok: false, message: "Repository URL cannot be empty." };
+	const requestedTarget = String(targetDir || "").trim();
+	let repoRoot = "";
+	if (requestedTarget) {
+		const resolved = resolveStudioPath(requestedTarget, cwd);
+		if (resolved.ok === false) return { ok: false, message: resolved.message };
+		repoRoot = resolved.resolved;
+	} else {
+		repoRoot = join(cwd, deriveStudioGitCloneTargetName(url));
+	}
+	const parentDir = dirname(repoRoot);
+	try {
+		mkdirSync(parentDir, { recursive: true });
+		if (existsSync(repoRoot)) {
+			const existing = readdirSync(repoRoot);
+			if (existing.length > 0) {
+				return { ok: false, message: `Clone destination already exists and is not empty: ${repoRoot}` };
+			}
+		}
+	} catch (error) {
+		return { ok: false, message: `Could not prepare clone destination: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	const cloneArgs = ["clone", url, repoRoot];
+	const cloneResult = spawnSync("git", cloneArgs, {
+		cwd: parentDir,
+		encoding: "utf-8",
+	});
+	if (cloneResult.status !== 0) {
+		return { ok: false, message: `Failed to clone repository: ${formatStudioGitSpawnFailure(cloneResult, cloneArgs)}` };
+	}
+	PROJECT_ROOT = repoRoot;
+	(globalThis as { PROJECT_ROOT?: string }).PROJECT_ROOT = PROJECT_ROOT;
+	return {
+		ok: true,
+		repoRoot,
+		message: `Cloned ${url} to ${repoRoot}.`,
+	};
+}
+
+function pullStudioGitRepository(repoPath: string | undefined, cwd: string):
+	| { ok: true; repoRoot: string; branch: string; hasHead: boolean; files: StudioGitChangedFile[]; content: string; label: string; message: string; level: "info" | "warning" }
+	| { ok: false; message: string; level: "info" | "warning" | "error" } {
+	const candidate = String(repoPath || PROJECT_ROOT || cwd || "").trim();
+	if (!candidate) return { ok: false, level: "warning", message: "No project root is available for git pull." };
+	const repoRootResult = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+		cwd: candidate,
+		encoding: "utf-8",
+	});
+	if (repoRootResult.status !== 0) {
+		return { ok: false, level: "warning", message: "No git repository found for the current project root." };
+	}
+	const repoRoot = String(repoRootResult.stdout || "").trim() || candidate;
+	ensureStudioGitIdentity(repoRoot);
+	const pullArgs = ["pull", "--ff-only"];
+	const pullResult = spawnSync("git", pullArgs, {
+		cwd: repoRoot,
+		encoding: "utf-8",
+	});
+	if (pullResult.status !== 0) {
+		return {
+			ok: false,
+			level: "error",
+			message: `Failed to pull latest changes: ${formatStudioGitSpawnFailure(pullResult, pullArgs)}`,
+		};
+	}
+	const diffResult = readStudioGitDiff(repoRoot);
+	const branchResult = spawnSync("git", ["branch", "--show-current"], {
+		cwd: repoRoot,
+		encoding: "utf-8",
+	});
+	let branch = branchResult.status === 0 ? String(branchResult.stdout || "").trim() : "";
+	if (!branch) branch = diffResult.ok ? diffResult.branch : "unknown branch";
+	const hasHeadResult = spawnSync("git", ["rev-parse", "--verify", "HEAD"], {
+		cwd: repoRoot,
+		encoding: "utf-8",
+	});
+	const hasHead = hasHeadResult.status === 0;
+	const pullMessage = String(pullResult.stdout || pullResult.stderr || "").trim() || "Pulled latest changes.";
+	if (diffResult.ok) {
+		return {
+			ok: true,
+			repoRoot,
+			branch,
+			hasHead,
+			files: diffResult.files,
+			content: diffResult.text,
+			label: diffResult.label,
+			message: pullMessage,
+			level: "info",
+		};
+	}
+	return {
+		ok: true,
+		repoRoot,
+		branch,
+		hasHead,
+		files: [],
+		content: "",
+		label: `git pull on ${branch}`,
+		message: `${pullMessage}${diffResult.level === "info" ? ` ${diffResult.message}` : ""}`.trim(),
+		level: diffResult.level === "warning" ? "warning" : "info",
 	};
 }
 
@@ -10459,6 +10594,16 @@ function buildStudioFaviconDataUri(style: StudioThemeStyle): string {
 	return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+function buildStudioHeaderIconDataUri(): string {
+	try {
+		const iconUrl = new URL("./assets/pistol.png", import.meta.url);
+		const iconBytes = readFileSync(iconUrl);
+		return `data:image/png;base64,${iconBytes.toString("base64")}`;
+	} catch {
+		return "";
+	}
+}
+
 function buildStudioHtml(
 	initialDocument: InitialStudioDocument | null,
 	studioToken?: string,
@@ -10525,11 +10670,12 @@ function buildStudioHtml(
 	const annotationHelpersScriptHref = `/studio-annotation-helpers.js?token=${encodeURIComponent(studioToken ?? "")}`;
 	const clientScriptHref = `/studio-client.js?token=${encodeURIComponent(studioToken ?? "")}`;
 	const faviconHref = buildStudioFaviconDataUri(style);
+	const headerIconHref = buildStudioHeaderIconDataUri();
 	const bootConfigJson = JSON.stringify({ mermaidConfig }).replace(/</g, "\\u003c");
 	const initialSshSession = isSshSession() ? "1" : "0";
 	const isEditorOnlyMode = studioMode === "editor-only";
-	const appTitle = isEditorOnlyMode ? "π Studio — Editor" : "π Studio";
-	const appSubtitle = isEditorOnlyMode ? "Editor Workspace" : "Editor & Response Workspace";
+	const appTitle = isEditorOnlyMode ? "Pistol — Editor" : "Pistol";
+	const appSubtitle = isEditorOnlyMode ? "Editor Workspace" : "Document Workspace";
 
 	return `<!doctype html>
 <html>
@@ -10547,7 +10693,7 @@ ${cssVarsBlock}
 </head>
 <body data-initial-source="${initialSource}" data-initial-label="${initialLabel}" data-initial-path="${initialPath}" data-initial-draft-id="${initialDraftId}" data-initial-resource-dir="${initialResourceDir}" data-model-label="${initialModel}" data-terminal-label="${initialTerminal}" data-terminal-detail="${initialTerminalDetailAttr}" data-context-tokens="${initialContextTokens}" data-context-window="${initialContextWindow}" data-context-percent="${initialContextPercent}" data-studio-mode="${studioMode}" data-ssh-session="${initialSshSession}">
   <header>
-    <h1><span class="app-logo" aria-hidden="true">π</span> Studio <span class="app-subtitle">${appSubtitle}</span></h1>
+    <h1>${headerIconHref ? `<img class="app-logo-image" src="${headerIconHref}" alt="" aria-hidden="true" />` : `<span class="app-logo" aria-hidden="true">π</span>`} <span class="app-title-text">Pistol</span> <span class="app-subtitle">${appSubtitle}</span></h1>
     <div class="controls">
       <button id="saveAsBtn" type="button" title="Save editor content to a new file path. Cmd/Ctrl+S falls back here when no direct save path is available.">Save editor as…</button>
       <button id="refreshFromDiskBtn" type="button" title="Reload the current file-backed document from disk.">Refresh from disk</button>
@@ -10572,6 +10718,16 @@ ${cssVarsBlock}
       </div>
       <div class="reference-meta">
         <button id="blade1ReferenceBadge" type="button" class="source-badge source-badge-button" title="Load the current project root into ProjectSelectionBlade.">Load Project</button>
+      </div>
+      <div class="project-clone-panel">
+        <div class="project-clone-title">Clone GitHub repository</div>
+        <div class="project-clone-form">
+          <input id="projectCloneUrlInput" type="text" placeholder="https://github.com/user/repo.git" title="GitHub repository URL to clone." />
+          <input id="projectCloneTargetInput" type="text" placeholder="/path/to/clone/folder (optional)" title="Optional clone destination folder. Leave blank to clone into the current working folder." />
+          <button id="projectCloneBtn" type="button" title="Clone the repository to local disk and set the cloned folder as the working directory.">Clone & load</button>
+          <button id="projectSyncBtn" type="button" title="Pull the latest changes for the loaded project from its remote.">Sync</button>
+        </div>
+        <div class="project-clone-hint">Clone creates a local working copy and Sync runs git pull in the loaded project root.</div>
       </div>
       <div class="response-wrap">
         <div id="blade1Actions" class="response-actions">
@@ -10639,6 +10795,7 @@ ${cssVarsBlock}
           <button id="blade3SaveBtn" type="button" title="Save the current markdown file.">Save Markdown</button>
           <button id="saveOverBtn" type="button" hidden aria-hidden="true" tabindex="-1" title="Legacy save button shim."></button>
           <button id="blade3CommitBtn" type="button" title="Commit the current markdown file to local git.">Commit</button>
+          <button id="blade3IterateBtn" type="button" title="Save the annotated draft into the project folder, send only the annotation delta to the server, and ask it to apply the requested changes.">Iterate</button>
           <button id="reviewNotesBtn" type="button" title="Toggle local comments beside the current editor document or draft. Comments stay outside the document text and can later be converted into [an: ...] annotations.">Comments</button>
           <button id="outlineBtn" type="button" title="Toggle document outline for the current editor text. Outline entries can jump between raw editor and preview.">Outline</button>
           <button id="scratchpadBtn" type="button" title="Open a local persistent scratchpad for the current editor document or draft. Scratchpad text is never run, critiqued, or exported unless you explicitly insert it into the editor.">Scratchpad</button>
@@ -10833,10 +10990,10 @@ ${cssVarsBlock}
         <div class="section-header-main">
           <select id="rightViewSelect" aria-label="Response view mode" title="Right pane view mode. F7 cycles when the right pane is active; Cmd/Ctrl+Alt+P switches directly to Preview; Cmd/Ctrl+Alt+W switches directly to Working.">
             <option value="markdown">Response (Raw)</option>
-            <option value="preview" selected>Response (Preview)</option>
+            <option value="preview">Response (Preview)</option>
             <option value="editor-preview">Editor (Preview)</option>
             <option value="trace">Working</option>
-            <option value="changes">Changes</option>
+            <option value="changes" selected>Changes</option>
             <option value="files">Files</option>
             <option value="repl">REPL</option>
           </select>
@@ -12474,6 +12631,51 @@ export default function (pi: ExtensionAPI) {
 				branch: diffResult.branch,
 				hasHead: diffResult.hasHead,
 				files: diffResult.files,
+			});
+			return;
+		}
+
+		if (msg.type === "clone_project_request") {
+			if (!isValidRequestId(msg.requestId)) {
+				sendToClient(client, { type: "error", requestId: msg.requestId, message: "Invalid request ID." });
+				return;
+			}
+			const result = cloneStudioGitRepository(msg.repoUrl, msg.targetDir, studioCwd);
+			if (result.ok === false) {
+				sendToClient(client, { type: "error", requestId: msg.requestId, message: result.message });
+				return;
+			}
+			sendToClient(client, {
+				type: "project_loaded",
+				requestId: msg.requestId,
+				path: result.repoRoot,
+				message: result.message,
+			});
+			return;
+		}
+
+		if (msg.type === "git_pull_request") {
+			if (!isValidRequestId(msg.requestId)) {
+				sendToClient(client, { type: "error", requestId: msg.requestId, message: "Invalid request ID." });
+				return;
+			}
+			const result = pullStudioGitRepository(msg.path, studioCwd);
+			if (result.ok === false) {
+				sendToClient(client, { type: "error", requestId: msg.requestId, message: result.message });
+				return;
+			}
+			sendToClient(client, {
+				type: "git_pull_result",
+				requestId: msg.requestId,
+				ok: true,
+				message: result.message,
+				level: result.level,
+				repoRoot: result.repoRoot,
+				branch: result.branch,
+				hasHead: result.hasHead,
+				content: result.content,
+				label: result.label,
+				files: result.files,
 			});
 			return;
 		}
@@ -15590,6 +15792,60 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			await openStudioView(trimmed, ctx, "full", { defaultSource: "last-response", commandLabel: "/studio" });
+		},
+	});
+
+	pi.registerCommand("pistol", {
+		description: "Open the Pistol browser UI (/pistol, /pistol <file>, /pistol --blank, /pistol --last, /pistol --no-browser, /pistol --port <port>)",
+		handler: async (args: string, ctx: ExtensionCommandContext) => {
+			const trimmed = args.trim();
+
+			if (trimmed === "stop" || trimmed === "--stop") {
+				await stopServer();
+				ctx.ui.notify("Stopped studio server.", "info");
+				return;
+			}
+
+			if (trimmed === "status" || trimmed === "--status") {
+				if (!serverState) {
+					ctx.ui.notify("Studio server is not running.", "info");
+					return;
+				}
+				const counts = getStudioClientCounts();
+				const url = buildStudioUrl(serverState.port, serverState.token, "full");
+				ctx.ui.notify(
+					`Studio running at ${url} (busy: ${isStudioBusy() ? "yes" : "no"}; full views: ${counts.full}; editor-only views: ${counts.editorOnly})`,
+					"info",
+				);
+				const sshTunnelHint = buildStudioSshTunnelHint(serverState.port, url);
+				if (sshTunnelHint) ctx.ui.notify(sshTunnelHint, "info");
+				return;
+			}
+
+			if (trimmed === "help" || trimmed === "--help" || trimmed === "-h") {
+				ctx.ui.notify(
+					"Usage: /pistol [path|--blank|--last]\n"
+						+ "  /pistol           Open Pistol with last model response (fallback: blank)\n"
+						+ "  /pistol <path>    Open Pistol with file preloaded\n"
+						+ "  /pistol --blank   Open with blank editor\n"
+						+ "  /pistol --last    Open with last model response\n"
+						+ "  /pistol --no-browser  Print the Studio URL without opening a browser\n"
+						+ "  /pistol --port <port> Bind Studio to a fixed localhost port when starting\n"
+						+ "  /pistol --open-remote  Over SSH, open the remote browser anyway\n"
+						+ "  /pistol --status  Show studio status\n"
+						+ "  /pistol --stop    Stop studio server\n"
+						+ "  Note: only one full /pistol view is allowed per Pi session.\n"
+						+ "  /pistol-replace [path]  Replace the current full Studio view with a new one\n"
+						+ "  /pistol-editor-only [path]  Open another Studio tab in editor-only mode\n"
+						+ "  /pistol-current <path>  Load a file into currently open Studio tab(s)\n"
+						+ "  /pistol-pdf [path]      Export a file or last response via Studio PDF\n"
+						+ "  /pistol-html [path]     Export a file or last response via Studio preview HTML",
+					"info",
+				);
+				return;
+			}
+
+			await openStudioView(trimmed, ctx, "full", { defaultSource: "last-response", commandLabel: "/pistol" });
 		},
 	});
 
